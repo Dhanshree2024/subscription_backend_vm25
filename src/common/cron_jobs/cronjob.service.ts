@@ -117,6 +117,8 @@ export class CronJobService {
                 const mailOptions = {
                     from: process.env.FROM_EMAIL, // Your sender email
                     to: user.business_email,
+                    // to: "dhanshree.konde@spitsolutions.com",
+
                     subject: '⏰ Subscription Renewal Reminder',
                     html: `
             <p>Hello ${user.first_name},</p>

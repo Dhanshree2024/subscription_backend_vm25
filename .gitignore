@@ -55,3 +55,12 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .env
+
+# Package files
+package.json
+package-lock.json
+
+
+# Ignore specific TypeScript files
+# src/common/middleware/cors.middleware.ts
+# src/main.ts
