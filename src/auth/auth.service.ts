@@ -298,6 +298,9 @@ export class AuthService {
           user_id: user.user_id,
           main_user_id: result[0].user_id,
           organization_id: user.organization.organization_id,
+          billingOrgId: user.org_billing_id,
+
+
           // jwt_token: tokens.accessToken,
           // jwt_refresh_token: tokens.refreshToken,
           // user_id: user.user_id,
@@ -471,6 +474,7 @@ export class AuthService {
         user_id: user.user_id,
         organization_id: user.organization.organization_id,
         passwordSet: user.passwordSet,
+        billingOrgId: user.org_billing_id,
         organization_schema_name: user.organization.organization_schema_name,
         permissions: result[0]?.permissions,
         role_id: result[0]?.role_id,
@@ -1642,7 +1646,7 @@ await this.userRepository.query(
     response.cookie('jwtToken', tokens.accessToken, cookieOptions);
     response.cookie('jwt_refresh_token', tokens.refreshToken, cookieOptions);
     response.cookie('system_user_id', encryptedUserId, cookieOptions);
-    // response.cookie('session_id', sessionId, cookieOptions);
+    response.cookie('session_id', sessionId, cookieOptions);
     response.cookie('x-organization-schema', encryptedSchemaName, cookieOptions);
     response.cookie('organization_id', encryptedOrganizationId, cookieOptions);
 
@@ -1650,7 +1654,7 @@ await this.userRepository.query(
     const nonHttpOnlyOptions = { ...cookieOptions, httpOnly: false };
 
      // ✅ SessionId cookie (frontend-readable)
-  response.cookie('session_id', sessionId, nonHttpOnlyOptions);
+  // response.cookie('session_id', sessionId, nonHttpOnlyOptions);
 
     response.cookie('role_id', encryptedRoleId, nonHttpOnlyOptions);
     response.cookie('permissions', encryptedPermissions, nonHttpOnlyOptions);

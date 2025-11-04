@@ -34,7 +34,7 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors({
     // origin: 'http://localhost:3000', // Allow all origins
-    origin: [ 'http://192.168.1.139:3005','http://192.168.1.115:3000','http://192.168.1.115:3001','http://localhost:3000','http://localhost:3001', 'http://192.168.1.139:3001','http://localhost:3005', 'http://192.168.1.148:3005'],
+    origin: ['http://192.168.1.139:3005','http://192.168.1.115:3000','http://192.168.1.115:3001','http://localhost:3000','http://localhost:3001', 'http://192.168.1.139:3001','http://localhost:3005', 'http://192.168.1.148:3005','http://192.168.1.25:3001','http://192.168.1.25:3005'],
     methods: 'GET, POST, PUT, DELETE, OPTIONS', // Allowed HTTP methods
     allowedHeaders: 'Content-Type, Authorization, X-API-KEY', // Allowed headers
     credentials: true, // Allow cookies
@@ -80,11 +80,11 @@ async function bootstrap() {
   app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
   // await app.listen(process.env.PORT ?? 8012);
-await app.listen(process.env.PORT ?? 8012, '0.0.0.0');
+await app.listen(process.env.PORT ?? 8015, '0.0.0.0');
 
 // Replace with your laptop's IP
-const laptopIp = '192.168.1.115';
-const port = process.env.PORT ?? 8012;
+const laptopIp = '192.168.1.25';
+const port = process.env.PORT ?? 8015;
 
 console.log(`
 🚀 Server running at:
@@ -92,7 +92,7 @@ console.log(`
    - Network: http://${laptopIp}:${port}
 `);
 
-  console.log(`🚀 Server running on http://localhost:${process.env.PORT ?? 8012}`);
+  console.log(`🚀 Server running on http://localhost:${process.env.PORT ?? 8015}`);
   
   
 }
