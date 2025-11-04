@@ -24,6 +24,9 @@ export class AssetStockSerialsScript{
     license_key text COLLATE pg_catalog."default",
     system_code text COLLATE pg_catalog."default",
     license_detail jsonb,
+    depreciation_start_date date,
+    depreciation_end_date date,
+    buy_price numeric(12,2),
     CONSTRAINT asset_stock_serials_asset_item_id_fkey FOREIGN KEY (asset_item_id)
         REFERENCES ${schemaName}.asset_items (asset_item_id) MATCH SIMPLE
         ON UPDATE NO ACTION

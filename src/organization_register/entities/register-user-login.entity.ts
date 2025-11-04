@@ -75,6 +75,8 @@ export class RegisterUserLogin {
 
 
 
+  @Column()
+  org_billing_id: number;
 
 
 

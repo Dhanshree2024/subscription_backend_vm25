@@ -39,8 +39,8 @@ import { assetProjectScript } from 'src/organization_register/onboarding_sql_scr
 import { assetCostCenterScript } from 'src/organization_register/onboarding_sql_scripts/assetcostcenter';
 import { assetLocationScript } from 'src/organization_register/onboarding_sql_scripts/assetlocation';
 import { assetDepreciationMethodsScript } from 'src/organization_register/onboarding_sql_scripts/assetdepreciationmethods';
-import { Product } from '../entity/product.entity';
-
+import { SuperAdminDefaultPermission } from 'src/organization_register/default_permissions/SuperAdminDefaultPermissions';
+import { TechnicianDefaultPermission } from 'src/organization_register/default_permissions/TechnicianDefaultPermissions';
 export class OrganizationSchemaManager {
   constructor(
     private readonly dataSource: DataSource,
@@ -75,19 +75,9 @@ export class OrganizationSchemaManager {
         await this.dataSource.getRepository(RegisterUserLogin).save(user);
         // await this.registerUser.save(user);
         console.log("hashedPassword:", hashedPassword);
-
-         // ✅ Fetch product with product_id = 1
-          const product = await this.dataSource
-            .getRepository(Product)
-            .findOne({ where: { productId: 1 } });
-
-          if (!product) {
-            throw new Error("Product with ID 1 not found");
-          }
-
-          console.log("Product schema_initial:", product.schemaInitial);
+    
         // Create schema for the organization
-        const schemaName = `${product.schemaInitial}_org_${user.organization.organization_schema_name}`;
+        const schemaName = `org_${user.organization.organization_schema_name}`;
         await this.dataSource.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
     
         console.log('1');
@@ -120,304 +110,736 @@ export class OrganizationSchemaManager {
     const branchscript = new BranchesScript(this.dataSource);
     await branchscript.createBranchesTable(schemaName);
 
-    console.log('3');
+    
+  console.log('3');
 
-    const departmentData = [
-      { department_name: 'Administration' },
-      { department_name: 'Human Resources (HR)' },
-      { department_name: 'Store' },
-      { department_name: 'Sales' },
-      { department_name: 'Support/ Customer Service' },
-    ];
+  const departmentData = [
+  { department_name: 'Human Resources (HR)' },
+  { department_name: 'Finance' },
+  { department_name: 'Accounts' },
+  { department_name: 'Sales' },
+  { department_name: 'Marketing' },
+  { department_name: 'Research and Development (R&D)' },
+  { department_name: 'Engineering' },
+  { department_name: 'Purchase / Procurement' },
+  { department_name: 'Operations' },
+  { department_name: 'Production' },
+  { department_name: 'Quality Control (QC)' },
+  { department_name: 'Quality Assurance (QA)' },
+  { department_name: 'Packaging and Dispatch' },
+  { department_name: 'Store' },
+  { department_name: 'Maintenance' },
+  { department_name: 'Information Technology (IT)' },
+  { department_name: 'Support/ Customer Service' },
+  { department_name: 'Administration' }
+]
 
-    await departmentscript.insertOrganizationDepartmentTable(
-      schemaName,
-      departmentData,
-    );
 
-    console.log('4');
+  await departmentscript.insertOrganizationDepartmentTable(
+    schemaName,
+    departmentData,
+  );
 
-    const rolesData = [
-      { role_id: 1, role_name: 'Admin' },
-      { role_id: 2, role_name: 'User' },
-    ];
 
-    await organizationrolesscript.insertOrganizationRolesTable(
-      schemaName,
-      rolesData,
-    );
+  const designations = [
+  { parent_department: 'Human Resources (HR)', designation_name: 'Chief HR Officer' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Benefits Coordinator' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Compensation & Benefits Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Diversity & Inclusion Specialist' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Employee Relations Specialist' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Administrator' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Assistant' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Business Partner' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Coordinator' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Director' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Generalist' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Information Systems Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Intern' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'HR Operations Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Payroll Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Payroll Specialist' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Recruiter' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Recruitment Coordinator' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Talent Acquisition Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Training & Development Manager' },
+  { parent_department: 'Human Resources (HR)', designation_name: 'Vice President of HR' },
 
-    console.log('5');
-    // Create table organization permission tables
-    const organizationpermissionsscript = new OrganizationPermissionScript(
-      this.dataSource,
-    );
-    await organizationpermissionsscript.createOrganizationPermissionTable(
-      schemaName,
-    );
+   { parent_department: 'Finance', designation_name: 'Accounting Analyst' },
+  { parent_department: 'Finance', designation_name: 'Auditor' },
+  { parent_department: 'Finance', designation_name: 'Benefits Manager' },
+  { parent_department: 'Finance', designation_name: 'Budget Analyst' },
+  { parent_department: 'Finance', designation_name: 'Chief Financial Officer (CFO)' },
+  { parent_department: 'Finance', designation_name: 'Commercial Loan Officer' },
+  { parent_department: 'Finance', designation_name: 'Controller' },
+  { parent_department: 'Finance', designation_name: 'Credit Counselor' },
+  { parent_department: 'Finance', designation_name: 'Economist' },
+  { parent_department: 'Finance', designation_name: 'Finance Director' },
+  { parent_department: 'Finance', designation_name: 'Finance Manager' },
+  { parent_department: 'Finance', designation_name: 'Financial Analyst' },
+  { parent_department: 'Finance', designation_name: 'Financial Planner' },
+  { parent_department: 'Finance', designation_name: 'Financial Services Representative' },
 
-    const rolesPermissionData = [
-      { role_id: 1, permission: adminDefaultPermission },
-      { role_id: 2, permission: userDefaultPermission },
-    ];
+  { parent_department: 'Accounts', designation_name: 'Accountant' },
+  { parent_department: 'Accounts', designation_name: 'Accounting Director' },
+  { parent_department: 'Accounts', designation_name: 'Accounts Payable/Receivable Clerk' },
+  { parent_department: 'Accounts', designation_name: 'Credit Authorizer' },
+  { parent_department: 'Accounts', designation_name: 'Payroll Clerk' },
 
-    await organizationpermissionsscript.insertOrganizationRolesPermissionTable(
-      schemaName,
-      rolesPermissionData,
-    );
+    { parent_department: 'Sales', designation_name: 'Sales Manager' },
+  { parent_department: 'Sales', designation_name: 'Regional Sales Director' },
+  { parent_department: 'Sales', designation_name: 'Vice President of Sales (VP Sales)' },
+  { parent_department: 'Sales', designation_name: 'Chief Sales Officer (CSO)' },
+  { parent_department: 'Sales', designation_name: 'Territory Manager' },
+  { parent_department: 'Sales', designation_name: 'District Manager' },
+  { parent_department: 'Sales', designation_name: 'Inside Sales Representative (ISR)' },
+  { parent_department: 'Sales', designation_name: 'Business Development Representative (BDR)' },
+  { parent_department: 'Sales', designation_name: 'Account Executive (AE)' },
+  { parent_department: 'Sales', designation_name: 'Customer Success Manager (CSM)' },
+  { parent_department: 'Sales', designation_name: 'Account Manager (AM)' },
+  { parent_department: 'Sales', designation_name: 'Sales Engineer' },
+  { parent_department: 'Sales', designation_name: 'Solutions Consultant' },
+  { parent_department: 'Sales', designation_name: 'Channel Account Manager (CAM)' },
+  { parent_department: 'Sales', designation_name: 'Partnership Manager' },
+  { parent_department: 'Sales', designation_name: 'Alliance Manager' },
+  { parent_department: 'Sales', designation_name: 'Distributor Account Manager' },
+  { parent_department: 'Sales', designation_name: 'Sales Operations Manager' },
+  { parent_department: 'Sales', designation_name: 'Customer Support Representative (CSR)' },
+  { parent_department: 'Sales', designation_name: 'Sales Analyst' },
 
-    console.log('6');
+  { parent_department: 'Marketing', designation_name: 'Marketing Specialist' },
+  { parent_department: 'Marketing', designation_name: 'Marketing Manager' },
+  { parent_department: 'Marketing', designation_name: 'Marketing Director' },
+  { parent_department: 'Marketing', designation_name: 'Graphic Designer' },
+  { parent_department: 'Marketing', designation_name: 'Marketing Research Analyst' },
+  { parent_department: 'Marketing', designation_name: 'Marketing Communications Manager' },
+  { parent_department: 'Marketing', designation_name: 'Marketing Consultant' },
+  { parent_department: 'Marketing', designation_name: 'Product Manager' },
+  { parent_department: 'Marketing', designation_name: 'Public Relations' },
+  { parent_department: 'Marketing', designation_name: 'Social Media Assistant' },
+  { parent_department: 'Marketing', designation_name: 'Brand Manager' },
+  { parent_department: 'Marketing', designation_name: 'SEO Manager' },
+  { parent_department: 'Marketing', designation_name: 'Content Marketing Manager' },
+  { parent_department: 'Marketing', designation_name: 'Copywriter' },
+  { parent_department: 'Marketing', designation_name: 'Media Buyer' },
+  { parent_department: 'Marketing', designation_name: 'Digital Marketing Manager' },
+  { parent_department: 'Marketing', designation_name: 'eCommerce Marketing Specialist' },
+  { parent_department: 'Marketing', designation_name: 'Brand Strategist' },
+  { parent_department: 'Marketing', designation_name: 'Vice President of Marketing' },
 
-    if (user) {
-      // Dynamically add the property
-      (user as any).role_id = 1;
-      (user as any).department_id = 1;
-    }
+   { parent_department: 'Research and Development (R&D)', designation_name: 'R&D Manager' },
+  { parent_department: 'Research and Development (R&D)', designation_name: 'Product Development Scientist' },
+  { parent_department: 'Research and Development (R&D)', designation_name: 'Research Analyst' },
+  { parent_department: 'Research and Development (R&D)', designation_name: 'Lab Technician' },
+  { parent_department: 'Research and Development (R&D)', designation_name: 'Innovation Manager' },
 
-    const inserted = await script.insertUserTable(schemaName, user);
+   { parent_department: 'Purchase / Procurement', designation_name: 'Chief Procurement Officer' },
+  { parent_department: 'Purchase / Procurement', designation_name: 'Supplier Relationship Manager' },
+  { parent_department: 'Purchase / Procurement', designation_name: 'Project Procurement Manager' },
+  { parent_department: 'Purchase / Procurement', designation_name: 'Procurement Analyst' },
+  { parent_department: 'Purchase / Procurement', designation_name: 'Executive Purchase' },
 
-    console.log('8');
+    { parent_department: 'Operations', designation_name: 'Operations Manager' },
+  { parent_department: 'Operations', designation_name: 'Supply Chain Coordinator' },
+  { parent_department: 'Operations', designation_name: 'Logistics Manager' },
+  { parent_department: 'Operations', designation_name: 'Production Supervisor' },
+  { parent_department: 'Operations', designation_name: 'Operations Assistant' },
+  { parent_department: 'Operations', designation_name: 'Operations Coordinator' },
+  { parent_department: 'Operations', designation_name: 'Operations Analyst' },
+  { parent_department: 'Operations', designation_name: 'Operations Director' },
+  { parent_department: 'Operations', designation_name: 'Vice President of Operations' },
+  { parent_department: 'Operations', designation_name: 'Operations Professional' },
+  { parent_department: 'Operations', designation_name: 'Scrum Master' },
+  { parent_department: 'Operations', designation_name: 'Continuous Improvement Lead' },
+  { parent_department: 'Operations', designation_name: 'Continuous Improvement Consultant' },
 
-    // Create table designation
-    const fieldCategoryScript = new assetFieldCategoryScript(this.dataSource);
-    await fieldCategoryScript.createAssetFieldCategoryScriptTable(schemaName);
+    { parent_department: 'Quality Assurance (QA)', designation_name: 'Quality Assurance Manager' },
+  { parent_department: 'Quality Assurance (QA)', designation_name: 'Quality Control Inspector' },
+  { parent_department: 'Quality Assurance (QA)', designation_name: 'Quality Analyst' },
+  { parent_department: 'Quality Assurance (QA)', designation_name: 'Compliance Officer' },
+  { parent_department: 'Quality Assurance (QA)', designation_name: 'Quality Assurance Specialist' },
 
-    const fieldCategoryData = [
-      { asset_field_category_name: 'General Information' },
-      { asset_field_category_name: 'Network & Domain Information' },
-      { asset_field_category_name: 'System Specification' },
-    ];
+   { parent_department: 'Store', designation_name: 'Store Executive' },
+  { parent_department: 'Store', designation_name: 'Store Manager' },
+  { parent_department: 'Store', designation_name: 'Inventory Control Specialist' },
+  { parent_department: 'Store', designation_name: 'Store Assistant' },
+  { parent_department: 'Store', designation_name: 'Warehouse Supervisor' },
+  { parent_department: 'Store', designation_name: 'Stock Clerk' },
 
-    await fieldCategoryScript.insertFieldCategoryTable(
-      schemaName,
-      fieldCategoryData,
-    );
+    { parent_department: 'Maintenance', designation_name: 'Maintenance Technician' },
+  { parent_department: 'Maintenance', designation_name: 'Maintenance Engineer' },
+  { parent_department: 'Maintenance', designation_name: 'Maintenance Supervisor' },
+  { parent_department: 'Maintenance', designation_name: 'Maintenance Manager' },
+  { parent_department: 'Maintenance', designation_name: 'Facilities Manager' },
+  { parent_department: 'Maintenance', designation_name: 'Electrical Maintenance Engineer' },
+  { parent_department: 'Maintenance', designation_name: 'Mechanical Maintenance Engineer' },
+  { parent_department: 'Maintenance', designation_name: 'HVAC Technician' },
+  { parent_department: 'Maintenance', designation_name: 'Plumbing Technician' },
+  { parent_department: 'Maintenance', designation_name: 'Building Maintenance Worker' },
 
-    const insertedFieldCategories = await this.dataSource.query(
-      `SELECT asset_field_category_id, asset_field_category_name 
-       FROM ${schemaName}.asset_field_category 
-       WHERE asset_field_category_name IN ('General Information', 'Network & Domain Information', 'System Specification')`,
-    );
+   { parent_department: 'Information Technology (IT)', designation_name: 'IT Manager' },
+  { parent_department: 'Information Technology (IT)', designation_name: 'Software Developer' },
+  { parent_department: 'Information Technology (IT)', designation_name: 'Network Administrator' },
+  { parent_department: 'Information Technology (IT)', designation_name: 'Systems Analyst' },
+  { parent_department: 'Information Technology (IT)', designation_name: 'IT Support Specialist' },
 
-    const categoryMap: Record<string, number> = {};
-    insertedFieldCategories.forEach((cat) => {
-      categoryMap[cat.asset_field_category_name] = cat.asset_field_category_id;
-    });
+    { parent_department: 'Support/ Customer Service', designation_name: 'Customer Service Manager' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Call Center Representative' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Technical Support Specialist' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Customer Success Manager' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Help Desk Technician' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Virtual Assistant' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Customer Service' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Customer Support' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Concierge' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Help Desk' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Account Representative' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Client Service Specialist' },
+  { parent_department: 'Support/ Customer Service', designation_name: 'Customer Care Associate' },
 
-    console.log('9');
+   { parent_department: 'Administration', designation_name: 'Administrative Assistant' },
+  { parent_department: 'Administration', designation_name: 'Receptionist' },
+  { parent_department: 'Administration', designation_name: 'Office Manager' },
+  { parent_department: 'Administration', designation_name: 'Auditing Clerk' },
+  { parent_department: 'Administration', designation_name: 'Bookkeeper' },
+  { parent_department: 'Administration', designation_name: 'Account Executive' },
+  { parent_department: 'Administration', designation_name: 'Branch Manager' },
+  { parent_department: 'Administration', designation_name: 'Business Manager' },
+  { parent_department: 'Administration', designation_name: 'Quality Control Coordinator' },
+  { parent_department: 'Administration', designation_name: 'Administrative Manager' },
+  { parent_department: 'Administration', designation_name: 'Chief Executive Officer' },
+  { parent_department: 'Administration', designation_name: 'Business Analyst' },
+  { parent_department: 'Administration', designation_name: 'Risk Manager' },
+  { parent_department: 'Administration', designation_name: 'Human Resources' },
+  { parent_department: 'Administration', designation_name: 'Office Assistant' },
+  { parent_department: 'Administration', designation_name: 'Secretary' },
+  { parent_department: 'Administration', designation_name: 'Office Clerk' },
+  { parent_department: 'Administration', designation_name: 'File Clerk' },
+  { parent_department: 'Administration', designation_name: 'Account Collector' },
+  { parent_department: 'Administration', designation_name: 'Administrative Specialist' },
+  { parent_department: 'Administration', designation_name: 'Executive Assistant' }
+  ];
 
-    // Create table Fields
-    const fieldScript = new ItemFieldsScript(this.dataSource);
-    await fieldScript.createItemFieldsTable(schemaName);
+await designationcript.insertDesignationTable(schemaName, designations);
 
-    const fieldData = [
-      {
-        asset_field_name: 'Location',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Location',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Expiry Date',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Expiry Date',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Port',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Port',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Contract Type',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Contract Type',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Firmware Version',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Firmware Version',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Processor',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'Processor',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'RAM',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'RAM',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'HDD',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'HDD',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Graphics',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'Graphics',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Screen Size',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'Screen Size',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Screen',
-        asset_field_category_id: categoryMap['System Specification'],
-        asset_field_label_name: 'Screen',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Pixel',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Pixel',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Product Description',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Product Description',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Type',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Type',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Capacity',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Capacity',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Host Name',
-        asset_field_category_id: categoryMap['General Information'],
-        asset_field_label_name: 'Host Name',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Domain Name',
-        asset_field_category_id: categoryMap['Network & Domain Information'],
-        asset_field_label_name: 'Domain Name',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Carrier',
-        asset_field_category_id: categoryMap['Network & Domain Information'],
-        asset_field_label_name: 'Carrier',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'IMEI No.',
-        asset_field_category_id: categoryMap['Network & Domain Information'],
-        asset_field_label_name: 'IMEI No.',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'IPv4',
-        asset_field_category_id: categoryMap['Network & Domain Information'],
-        asset_field_label_name: 'IPv4',
-        asset_field_type: 'text',
-      },
-      {
-        asset_field_name: 'Platform',
-        asset_field_category_id: categoryMap['Network & Domain Information'],
-        asset_field_label_name: 'Platform',
-        asset_field_type: 'text',
-      },
-    ];
 
-    await fieldScript.insertAssetFieldsTable(schemaName, fieldData);
+  console.log('4');
 
-    console.log('10');
+  const rolesData = [
+    { role_id: 1, role_name: 'Super Admin' },
+    { role_id: 2, role_name: 'Admin' },
+    { role_id: 3, role_name: 'Technician' },
+    { role_id: 4, role_name: 'User' },
+  ];
 
-    // Create table designation
-    const itemfieldMappingScript = new ItemFieldsMappingScript(this.dataSource);
-    await itemfieldMappingScript.createItemFieldsMappingTable(schemaName);
 
-    console.log('11');
 
-    // Create table designation
+  await organizationrolesscript.insertOrganizationRolesTable(
+    schemaName,
+    rolesData,
+  );
 
-    /// STEP 1: Create Main Category Table
-    const assetCategoryScript = new CategoryScript(this.dataSource);
-    await assetCategoryScript.createCategoryTable(schemaName);
+  console.log('5');
+  // Create table organization permission tables
+  const organizationpermissionsscript = new OrganizationPermissionScript(
+    this.dataSource,
+  );
+  await organizationpermissionsscript.createOrganizationPermissionTable(
+    schemaName,
+  );
 
-    // STEP 1.1: Insert Main Categories (only name, using helper method)
-    const assetMainCategoryData = [
-      { main_category_name: 'IT' },
-      { main_category_name: 'Non IT' },
-    ];
-    await assetCategoryScript.insertAssetMainCategoryTable(
-      schemaName,
-      assetMainCategoryData,
-    );
+  const rolesPermissionData = [
+    { role_id: 1, permission: SuperAdminDefaultPermission },
+    { role_id: 2, permission: adminDefaultPermission },
+    { role_id: 3, permission: TechnicianDefaultPermission },
+    { role_id: 4, permission: userDefaultPermission },
+  ];
 
-    // Fetch inserted categories to get their generated IDs
-    const insertedMainCategories = await this.dataSource.query(
-      `SELECT main_category_id, main_category_name FROM ${schemaName}.asset_main_category WHERE main_category_name IN ('IT', 'Non IT')`,
-    );
+  await organizationpermissionsscript.insertOrganizationRolesPermissionTable(
+    schemaName,
+    rolesPermissionData,
+  );
 
-    const mainCatMap: Record<string, number> = {};
-    insertedMainCategories.forEach((cat) => {
-      mainCatMap[cat.main_category_name] = cat.main_category_id;
-    });
+  console.log('6');
 
-    if (!mainCatMap['IT'] || !mainCatMap['Non IT']) {
-      throw new Error('Main category IDs not found.');
-    }
+  if (user) {
+    // Dynamically add the property
+    (user as any).role_id = 1;
+    (user as any).department_id = 1;
+  }
 
-    console.log('12');
+  const inserted = await script.insertUserTable(schemaName, user);
 
-    // STEP 2: Create and Insert Subcategories
-    const assetSubCategoryScript = new SubCategoryScript(this.dataSource);
-    await assetSubCategoryScript.createSubCategoryTable(schemaName);
+  console.log('8');
 
-    const assetSubCategoryData = [
-      { main_category_id: mainCatMap['IT'], sub_category_name: 'Hardware' },
-      { main_category_id: mainCatMap['IT'], sub_category_name: 'Software' },
-      { main_category_id: mainCatMap['IT'], sub_category_name: 'Cloud' },
-      { main_category_id: mainCatMap['IT'], sub_category_name: 'Data' },
-      {
-        main_category_id: mainCatMap['IT'],
-        sub_category_name: 'Consumable Inventory',
-      },
-      {
-        main_category_id: mainCatMap['Non IT'],
-        sub_category_name: 'Electrical Equipment',
-      },
-      {
-        main_category_id: mainCatMap['Non IT'],
-        sub_category_name: 'Scientific Equipment',
-      },
-      {
-        main_category_id: mainCatMap['Non IT'],
-        sub_category_name: 'Office Equipment',
-      },
-      {
-        main_category_id: mainCatMap['Non IT'],
-        sub_category_name: 'Furniture',
-      },
-    ];
+  // Create table designation
+  const fieldCategoryScript = new assetFieldCategoryScript(this.dataSource);
+  await fieldCategoryScript.createAssetFieldCategoryScriptTable(schemaName);
 
-    await assetSubCategoryScript.insertAssetSubCategoryTable(
-      schemaName,
-      assetSubCategoryData,
-    );
+  const fieldCategoryData = [
+    { asset_field_category_name: 'General Information' },
+    { asset_field_category_name: 'Network & Domain Information' },
+    { asset_field_category_name: 'System Specification' },
+    { asset_field_category_name: 'Hardware Details' },
+    { asset_field_category_name: 'Warranty Details' },
+     { asset_field_category_name: 'Maintenance/ AMC Contract' },
 
-    console.log('13');
+  ];
+
+  await fieldCategoryScript.insertFieldCategoryTable(
+    schemaName,
+    fieldCategoryData,
+  );
+
+  const insertedFieldCategories = await this.dataSource.query(
+    `SELECT asset_field_category_id, asset_field_category_name 
+ FROM ${schemaName}.asset_field_category 
+ WHERE asset_field_category_name IN ('General Information',
+  'Network & Domain Information',
+  'Warranty Details',
+   'Hardware Details',
+    'System Specification',
+    'Maintenance/ AMC Contract')`,
+  );
+
+  const categoryMap: Record<string, number> = {};
+  insertedFieldCategories.forEach((cat) => {
+    categoryMap[cat.asset_field_category_name] = cat.asset_field_category_id;
+  });
+
+  console.log('9');
+
+  // Create table Fields
+  const fieldScript = new ItemFieldsScript(this.dataSource);
+  await fieldScript.createItemFieldsTable(schemaName);
+
+  const fieldData = [
+   {
+    asset_field_name: 'Form Factor',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Form Factor',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['Tower', '1 U Rack', '2 U Rack','Square' , 'Wide', 'Curve'],
+
+  },
+  {
+    asset_field_name: 'Processor',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Processor',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'RAM',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'RAM',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'HDD',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'HDD',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['SATA', 'SAS', 'SSD'],
+  },
+  {
+    asset_field_name: 'Graphics',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Graphics',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Operating System',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Operating System',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['Android', 'Tizen', 'WebOS', 'Proprietary']
+
+  },
+  {
+    asset_field_name: 'Serial No.',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Serial No.',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Monitor',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Monitor',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Manufacture',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Manufacture',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Model Name',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Model Name',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Display Name',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Display Name',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['HD', 'Full HD', 'Touch']
+
+  },
+  {
+    asset_field_name: 'Screen Size',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Screen Size',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Connetivity Type',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Connetivity Type',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['VGA', 'DVI', 'HDMI', 'DP', 'Thunderbolt', 'USB C']
+
+  },
+  {
+    asset_field_name: 'Serial No.',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Serial No.',
+    asset_field_type: 'text',
+  },
+ {
+    asset_field_name: 'Switch Type',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Serial No.',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['Unmanage', 'Smart Manage', 'Managed', 'L1', 'L2', 'L3', 'SAN']
+
+  },
+
+  { asset_field_name: 'Storage Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Storage Type', asset_field_type: 'text' },
+  { asset_field_name: 'Container Type', asset_field_category_id: categoryMap['Hardware Details'], 
+    asset_field_label_name: 'Container Type', asset_field_type: 'dropdown' ,asset_field_type_details: ['Single', 'Dual']
+},
+  { asset_field_name: 'Raid Card', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Raid Card', asset_field_type: 'text' },
+  { asset_field_name: 'Power Supply', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Power Supply', asset_field_type: 'text' },
+  { asset_field_name: 'SAS / HBA Card', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'SAS / HBA Card', asset_field_type: 'text' },
+  { asset_field_name: 'Printer Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Printer Type', asset_field_type: 'dropdown' ,
+    asset_field_type_details: [
+  'Deskjet', 
+  'Ink Tank', 
+  'Laser', 
+  'Plotter', 
+  'Mono', 
+  'MFP', 
+  'Black & White', 
+  'Color'
+]
+},
+  { asset_field_name: 'Scanner Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Scanner Type', asset_field_type: 'dropdown',
+    asset_field_type_details: ['Flat Bed', 'Feeder', 'Handheld']
+ },
+  { asset_field_name: 'Print Mode', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Print Mode', asset_field_type: 'dropdown',
+    asset_field_type_details: ['One Side Print' , 'Duplex Print']
+ },
+  { asset_field_name: 'Scan Mode', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Scan Mode', asset_field_type: 'dropdown' },
+  { asset_field_name: 'Paper Size Support', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Paper Size Support', asset_field_type: 'dropdown' ,
+    asset_field_type_details: ['A4', 'Legal', 'A3', 'A1']
+},
+  { asset_field_name: 'Display OutPut', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Display OutPut', asset_field_type: 'dropdown',
+    asset_field_type_details: ['VGA', 'DVI', 'HDMI', 'DP']
+
+   },
+  { asset_field_name: 'Interface Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Interface Type', asset_field_type: 'text' },
+  { asset_field_name: 'Interface Support', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Interface Support', asset_field_type: 'text' },
+  { asset_field_name: 'Port Type & Speed', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Port Type & Speed', asset_field_type: 'text' },
+  { asset_field_name: 'No. of Ports', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'No. of Ports', asset_field_type: 'text' },
+  { asset_field_name: 'No. Of Ports', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'No. Of Ports', asset_field_type: 'text' },
+  { asset_field_name: 'No. Port', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'No. Port', asset_field_type: 'text' },
+  { asset_field_name: 'No. of Plug outlet', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'No. of Plug outlet', asset_field_type: 'text' },
+  { asset_field_name: 'No. of Video Input Ports', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'No. of Video Input Ports', asset_field_type: 'text' },
+  { asset_field_name: 'Rack orientation', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Rack orientation',
+     asset_field_type: 'dropdown',
+asset_field_type_details: ['Verticle', 'Horizontal']
+
+   },
+  { asset_field_name: 'Rack Name / No.', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Rack Name / No.', asset_field_type: 'text' },
+  { asset_field_name: 'Size Of Rack', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Size Of Rack', asset_field_type: 'text' },
+  { asset_field_name: 'Inpute Plug type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Inpute Plug type', asset_field_type: 'text' },
+  { asset_field_name: 'Serge Protction', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Serge Protction', asset_field_type: 'dropdown',
+    asset_field_type_details: ['Yes', 'No']
+ },
+  { asset_field_name: 'POE Support', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'POE Support', asset_field_type: 'text' },
+  { asset_field_name: 'Uplink Support', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Uplink Support', asset_field_type: 'dropdown',
+    asset_field_type_details: ['RJ 45', 'FC', 'Hybrid']
+ },
+  { asset_field_name: 'Deplyoment Roll', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Deplyoment Roll', asset_field_type: 'text' },
+  { asset_field_name: 'Deployement Mode', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Deployement Mode', asset_field_type: 'text' },
+  { asset_field_name: 'Antena', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Antena', asset_field_type: 'text' },
+  { asset_field_name: 'Wireless Band', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Wireless Band', asset_field_type: 'text' },
+  { asset_field_name: 'Troughput', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Troughput', asset_field_type: 'text' },
+  { asset_field_name: 'Orientation Support', asset_field_category_id: categoryMap['Hardware Details'], 
+    asset_field_label_name: 'Orientation Support', asset_field_type: 'dropdown',
+  asset_field_type_details: ['Landscape', 'Portrait', 'Auto-rotate']
+ },
+  { asset_field_name: 'Zoom type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Zoom type', asset_field_type: 'text' },
+  { asset_field_name: 'Brightness', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Brightness', asset_field_type: 'text' },
+  { asset_field_name: 'Resolution', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Resolution', asset_field_type: 'dropdown',
+    asset_field_type_details: ['HD', 'Full HD', '4K UHD', '8K UHD']
+ },
+  { asset_field_name: 'Lens Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Lens Type', asset_field_type: 'dropdown' ,
+    asset_field_type_details: ['Fixed', 'Varifocal', 'Motorized Zoom']
+},
+  { asset_field_name: 'Camera Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Camera Type', asset_field_type: 'text' },
+  { asset_field_name: 'Device Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Device Type', asset_field_type: 'dropdown',
+    asset_field_type_details: ['DVR', 'NVR', 'Hybrid NVR']
+ },
+  { asset_field_name: 'Speaker Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Speaker Type',
+     asset_field_type: 'dropdown', asset_field_type_details: ['Mono', 'Stereo', '2.1', '5.1', 'Soundbar', 'Smart Speaker']
+ },
+  { asset_field_name: 'Output RMS', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Output RMS', asset_field_type: 'text' },
+  { asset_field_name: 'Mount Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Mount Type', asset_field_type: 'dropdown' ,
+    asset_field_type_details: ['Desktop', 'Wall-mounted', 'Ceiling', 'Portable']
+},
+  { asset_field_name: 'Integration Platform Support', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Integration Platform Support', asset_field_type: 'dropdown' ,
+    asset_field_type_details: ['Zoom Rooms', 'Microsoft Teams', 'Google Meet']
+},
+  { asset_field_name: 'Media Player', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Media Player', asset_field_type: 'text' },
+  { asset_field_name: 'Storage Capacity', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Storage Capacity', asset_field_type: 'text' },
+  { asset_field_name: 'Charging Method', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Charging Method', asset_field_type: 'dropdown' ,
+    asset_field_type_details: ['Cable', 'Dock', 'Wireless']
+},
+  { asset_field_name: 'Keypad Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'Keypad Type', asset_field_type: 'dropdown',
+    asset_field_type_details: ['Physical', 'Touchscreen', 'Hybrid']
+ },
+  { asset_field_name: 'SIM Type', asset_field_category_id: categoryMap['Hardware Details'],
+     asset_field_label_name: 'SIM Type', asset_field_type: 'dropdown',
+    asset_field_type_details: ['Physical SIM', 'eSIM', 'Dual SIM']
+ },
+ {
+    asset_field_name: 'Projector Type',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Projector Type',
+    asset_field_type: 'dropdown',
+    asset_field_type_details: ['DLP', 'LCD', 'LED', '3D']
+
+  },
+
+  { asset_field_name: 'IMEI No', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'IMEI No', asset_field_type: 'text' },
+  { asset_field_name: 'Carrier Name', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Carrier Name', asset_field_type: 'text' },
+  { asset_field_name: 'Mobile No.', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Mobile No.', asset_field_type: 'text' },
+  { asset_field_name: 'Plan Details', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Plan Details', asset_field_type: 'text' },
+  { asset_field_name: 'Region / Zone', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Region / Zone', asset_field_type: 'text' },
+  { asset_field_name: 'Environment', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Environment', asset_field_type: 'text' },
+  { asset_field_name: 'Owner / Team', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Owner / Team', asset_field_type: 'text' },
+  { asset_field_name: 'Status', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Status', asset_field_type: 'text' },
+  { asset_field_name: 'Application Linkage', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Application Linkage', asset_field_type: 'text' },
+  { asset_field_name: 'Resource Owner', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Resource Owner', asset_field_type: 'text' },
+  { asset_field_name: 'Public IP', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Public IP', asset_field_type: 'text' },
+  { asset_field_name: 'ROM', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'ROM', asset_field_type: 'text' },
+  { asset_field_name: 'Digital Pen', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Digital Pen', asset_field_type: 'text' },
+  { asset_field_name: 'Display Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Display Type', asset_field_type: 'text' },
+  { asset_field_name: 'Connetivity', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Connetivity', asset_field_type: 'text' },
+  { asset_field_name: 'Connetivity Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Connetivity Type', asset_field_type: 'text' },
+  { asset_field_name: 'Domain Name', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Domain Name', asset_field_type: 'text' },
+  { asset_field_name: 'IP Details', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'IP Details', asset_field_type: 'text' },
+  { asset_field_name: 'Warrany Date', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Warrany Date', asset_field_type: 'date' },
+  { asset_field_name: 'Warrany Year', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Warrany Year', asset_field_type: 'number' },
+  { asset_field_name: 'Support Type', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Support Type', asset_field_type: 'text' },
+  { asset_field_name: 'Mac Address', asset_field_category_id: categoryMap['Hardware Details'], asset_field_label_name: 'Mac Address', asset_field_type: 'text' },
+ {
+    asset_field_name: 'Host Name',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Host Name',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Domain Name',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Domain Name',
+    asset_field_type: 'text',
+  },
+   {
+    asset_field_name: 'Threat Protection Module',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Threat Protection Module',
+    asset_field_type: 'text',
+  },
+{
+    asset_field_name: 'Port Type',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Port Type',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Speed',
+    asset_field_category_id: categoryMap['Hardware Details'],
+    asset_field_label_name: 'Speed',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'IP Details',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'IP Details',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Public IP',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Public IP',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Plan Details',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Plan Details',
+    asset_field_type: 'text',
+  },
+  {
+    asset_field_name: 'Warrany Date',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Warrany Date',
+    asset_field_type: 'date',
+  },
+  {
+    asset_field_name: 'Warrany Year',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Warrany Year',
+    asset_field_type: 'number',
+  },
+  {
+    asset_field_name: 'Support Type',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'Support Type',
+    asset_field_type: 'text',
+  },
+{
+    asset_field_name: 'LFD Type',
+    asset_field_category_id: categoryMap['Network & Domain Information'],
+    asset_field_label_name: 'LFD Type',
+    asset_field_type: 'dropdown',
+      asset_field_type_details: ['IPS', 'VA', 'OLED', 'QLED']
+
+  },
+
+
+
+    { asset_field_name: 'Maintenance frequency', asset_field_category_id: categoryMap['Maintenance/ AMC Contract'], asset_field_label_name: 'Maintenance frequency', asset_field_type: 'text' },
+  { asset_field_name: 'Maintenance Vendor', asset_field_category_id: categoryMap['Maintenance/ AMC Contract'], asset_field_label_name: 'Maintenance Vendor', asset_field_type: 'text' },
+
+    { asset_field_name: "IP Address", asset_field_category_id: categoryMap["Network & Domain Information"], asset_field_label_name: "IP Address", asset_field_type: "text" },
+  { asset_field_name: "Connectivity Type", asset_field_category_id: categoryMap["Network & Domain Information"], asset_field_label_name: "Connectivity Type", asset_field_type: "text",
+    asset_field_type_details: ['Bluetooth', 'Wi-Fi', 'RS-232', 'telephone line', 'LAN', 'Wi-Fi'
+
+]
+
+   },
+  { asset_field_name: "Communication Protocol", asset_field_category_id: categoryMap["Network & Domain Information"], 
+    asset_field_label_name: "Communication Protocol", asset_field_type: "dropdown",
+  asset_field_type_details: ['SIP', 'VoIP', 'PRI']
+ },
+  { asset_field_name: "Fax Protocol", asset_field_category_id: categoryMap["Network & Domain Information"], asset_field_label_name: "Fax Protocol", asset_field_type: "text" }
+
+  ];
+
+  await fieldScript.insertAssetFieldsTable(schemaName, fieldData);
+
+  console.log('10');
+
+  // Create table designation
+  const itemfieldMappingScript = new ItemFieldsMappingScript(this.dataSource);
+  await itemfieldMappingScript.createItemFieldsMappingTable(schemaName);
+
+  console.log('11');
+
+  // Create table designation
+
+  /// STEP 1: Create Main Category Table
+  const assetCategoryScript = new CategoryScript(this.dataSource);
+  await assetCategoryScript.createCategoryTable(schemaName);
+
+  // STEP 1.1: Insert Main Categories (only name, using helper method)
+  const assetMainCategoryData = [
+    { main_category_name: 'IT' },
+    { main_category_name: 'Non IT' },
+  ];
+  await assetCategoryScript.insertAssetMainCategoryTable(
+    schemaName,
+    assetMainCategoryData,
+  );
+  
+  
+
+  // Fetch inserted categories to get their generated IDs
+  const insertedMainCategories = await this.dataSource.query(
+    `SELECT main_category_id, main_category_name FROM ${schemaName}.asset_main_category WHERE main_category_name IN ('IT', 'Non IT')`,
+  );
+
+  const mainCatMap: Record<string, number> = {};
+  insertedMainCategories.forEach((cat) => {
+    mainCatMap[cat.main_category_name] = cat.main_category_id;
+  });
+
+  if (!mainCatMap['IT'] || !mainCatMap['Non IT']) {
+    throw new Error('Main category IDs not found.');
+  }
+
+  console.log('12');
+
+  // STEP 2: Create and Insert Subcategories
+  const assetSubCategoryScript = new SubCategoryScript(this.dataSource);
+  await assetSubCategoryScript.createSubCategoryTable(schemaName);
+
+  const assetSubCategoryData = [
+    { main_category_id: mainCatMap['IT'], sub_category_name: 'Hardware' },
+    { main_category_id: mainCatMap['IT'], sub_category_name: 'Software' },
+    { main_category_id: mainCatMap['IT'], sub_category_name: 'Data' },
+  { main_category_id: mainCatMap['IT'], sub_category_name: 'Network Field' },
+  { main_category_id: mainCatMap['IT'], sub_category_name: 'Mobile Devices' },
+  { main_category_id: mainCatMap['IT'], sub_category_name: 'Audio & Video' },
+  { main_category_id: mainCatMap['IT'], sub_category_name: 'CCTV & Biometrics' },
+  { main_category_id: mainCatMap['IT'], sub_category_name: 'Cloud Asset' },
+    {
+      main_category_id: mainCatMap['IT'],
+      sub_category_name: 'Consumable Inventory',
+    },
+    {
+      main_category_id: mainCatMap['Non IT'],
+      sub_category_name: 'Electrical Equipments',
+    },
+    {
+      main_category_id: mainCatMap['Non IT'],
+      sub_category_name: 'Scientific Equipments',
+    },
+    {
+      main_category_id: mainCatMap['Non IT'],
+      sub_category_name: 'Office Equipmemts',
+    },
+    {
+      main_category_id: mainCatMap['Non IT'],
+      sub_category_name: 'Furniture',
+    },
+  ];
+
+
+  await assetSubCategoryScript.insertAssetSubCategoryTable(
+    schemaName,
+    assetSubCategoryData,
+  );
+
+  console.log('13');
 
     // Fetch inserted subcategories to build mapping
     const insertedSubCategories = await this.dataSource.query(
@@ -872,36 +1294,117 @@ export class OrganizationSchemaManager {
     await statusScript.createAssetStatusTable(schemaName);
 
     const statusData = [
-      { status_type_name: 'AVAILABLE' },
-      { status_type_name: 'IN USE' },
-    ];
+  {
+    status_type_name: 'In Use',
+    asset_status_description: 'Asset is currently being used by an employee',
+    status_color_code: '#0068FF',
+  },
+  {
+    status_type_name: 'Available',
+    asset_status_description: 'Asset is available for assignment',
+    status_color_code: '#00C18E',
+  },
+  {
+    status_type_name: 'Damaged',
+    asset_status_description: 'Asset is physically damaged and needs repair',
+    status_color_code: '#FF4D4F',
+  },
+  {
+    status_type_name: 'Decommissioned',
+    asset_status_description: 'Asset is retired and no longer in service',
+    status_color_code: '#8E44AD',
+  },
+];
 
     await statusScript.insertAssetStatusTable(schemaName, statusData);
 
     console.log('15');
 
     // Create table designation
-    const ownershipstatusScript = new AssetOwnershipStatusTypesScript(
-      this.dataSource,
-    );
-    await ownershipstatusScript.createAssetOwnershipStatusTypesTable(
-      schemaName,
-    );
-
-    const ownershipstatusData = [
-      { ownership_status_type_name: 'CAPEX' },
-      { ownership_status_type_name: 'LEASE' },
-      { ownership_status_type_name: 'OPEX' },
-      { ownership_status_type_name: 'RENTED' },
-      { ownership_status_type_name: 'OWNED' },
+     const ownershipstatusScript = new AssetOwnershipStatusTypesScript(
+          this.dataSource,
+        );
+        await ownershipstatusScript.createAssetOwnershipStatusTypesTable(
+          schemaName,
+        );
+    
+     
+        const ownershipstatusData = [
+      {
+        ownership_status_type_name: 'Donated Asset',
+        ownership_status_description: 'Asset received through donation',
+        ownership_status_type: 'NA',
+        asset_ownership_status_color: '#A29BFE',
+      },
+      {
+        ownership_status_type_name: 'Finance Lease',
+        ownership_status_description: 'Asset acquired through finance lease agreement',
+        ownership_status_type: 'Capex',
+        asset_ownership_status_color: '#6AB04C',
+      },
+      {
+        ownership_status_type_name: 'Gifted Asset',
+        ownership_status_description: 'Asset received as a gift from external parties',
+        ownership_status_type: 'NA',
+        asset_ownership_status_color: '#E84393',
+      },
+      {
+        ownership_status_type_name: 'Internally Developed Asset',
+        ownership_status_description: 'Asset developed internally by the company',
+        ownership_status_type: 'Capex',
+        asset_ownership_status_color: '#0984E3',
+      },
+      {
+        ownership_status_type_name: 'Owned Asset',
+        ownership_status_description: 'Asset is fully owned by the company',
+        ownership_status_type: 'Capex',
+        asset_ownership_status_color: '#2ECC71',
+      },
+      {
+        ownership_status_type_name: 'Perpetual License',
+        ownership_status_description: 'Software purchased outright with indefinite usage rights',
+        ownership_status_type: 'Capex',
+        asset_ownership_status_color: '#1ABC9C',
+      },
+      {
+        ownership_status_type_name: 'Under Construction',
+        ownership_status_description: 'Asset currently under construction or development',
+        ownership_status_type: 'Capex',
+        asset_ownership_status_color: '#F9CA24',
+      },
+      {
+        ownership_status_type_name: 'Rented Asset',
+        ownership_status_description: 'Asset rented on short-term or long-term basis',
+        ownership_status_type: 'Opex',
+        asset_ownership_status_color: '#D980FA',
+      },
+      {
+        ownership_status_type_name: 'Subscription-Based Asset',
+        ownership_status_description: 'Asset accessed through subscription model',
+        ownership_status_type: 'Opex',
+        asset_ownership_status_color: '#E67E22',
+      },
+      {
+        ownership_status_type_name: 'Support & Maintenance',
+        ownership_status_description: 'Annual maintenance or support agreements',
+        ownership_status_type: 'Opex',
+        asset_ownership_status_color: '#8395A7',
+      },
+      {
+        ownership_status_type_name: 'Usage-Based Licensing',
+        ownership_status_description: 'Pay-as-you-go or metered software services',
+        ownership_status_type: 'Opex',
+        asset_ownership_status_color: '#BDC581',
+      },
     ];
-
-    await ownershipstatusScript.insertAssetOwnershipStatusTable(
-      schemaName,
-      ownershipstatusData,
-    );
-
-    console.log('16');
+    
+        await ownershipstatusScript.insertAssetOwnershipStatusTable(
+          schemaName,
+          ownershipstatusData,
+        );
+    
+        console.log('16');
+    
 
     // Create table designation
     const workingstatusScript = new AssetWorkingStatusScript(this.dataSource);
@@ -1062,8 +1565,7 @@ export class OrganizationSchemaManager {
     await stockSerialScript.createAssetStockSerialsTable(schemaName);
 
     console.log('25');
-
-       // Create table OrgStats
+      // Create table OrgStats
   const OrgStats = new orgStatsScriptScript(this.dataSource)
   await OrgStats.createOrgStatsScriptTable(schemaName)
 
@@ -1097,23 +1599,24 @@ export class OrganizationSchemaManager {
 
     // Send onboarding email with plain-text password
     // await this.sendOnboardingEmail(user.users_business_email, randomPassword);
-    // const fullname = 'Norbik Asset';
-    // console.log("Generated plain password (to be sent via email):", randomPassword);
+    
+    const fullname = 'Norbik Asset';
+    console.log("Generated plain password (to be sent via email):", randomPassword);
 
-    // await this.mailService.sendEmail(
-    //   user.business_email,
-    //   'Welcome Aboard! Everything You Need to Get Started',
-    //   await renderEmail(
-    //     EmailTemplate.ONBOARDING_CONFIRMATION,
-    //     {
-    //       name: fullname,
-    //       companyName: user.organization.organization_name,
-    //       trialUrl: `${process.env.CLIENT_ORIGIN_URL}/sign-in`,
-    //       username: user.business_email,
-    //       password: randomPassword,
-    //     },
-    //     this.mailConfigService, // Ensure database connection is passed
-    //   ),
-    // );
+    await this.mailService.sendEmail(
+      user.business_email,
+      'Welcome Aboard! Everything You Need to Get Started',
+      await renderEmail(
+        EmailTemplate.ONBOARDING_CONFIRMATION,
+        {
+          name: fullname,
+          companyName: user.organization.organization_name,
+          trialUrl: `${process.env.CLIENT_ORIGIN_URL}/sign-in`,
+          username: user.business_email,
+          password: randomPassword,
+        },
+        this.mailConfigService, // Ensure database connection is passed
+      ),
+    );
   }
 }

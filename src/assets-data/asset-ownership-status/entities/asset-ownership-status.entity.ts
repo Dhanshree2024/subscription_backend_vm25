@@ -5,7 +5,9 @@ import { Entity, PrimaryGeneratedColumn, Column, OneToOne } from 'typeorm';
 export enum OwnershipType {
   CAPEX = 'capex',
   OPEX = 'opex',
+  NA = 'NA'
 }  
+ 
 
 
 @Entity('asset_ownership_status_types')

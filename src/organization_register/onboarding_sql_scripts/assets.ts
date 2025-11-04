@@ -5,15 +5,15 @@ import { DataSource } from 'typeorm';
 
 
 @Injectable()
-export class AssetsScript{
-  constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
-  ) { }
+export class AssetsScript {
+    constructor(
+        @InjectDataSource() private readonly dataSource: DataSource,
+    ) { }
 
 
-  async createAssetsTable(schemaName: string): Promise<void> {
-       
-            await this.dataSource.query(`
+    async createAssetsTable(schemaName: string): Promise<void> {
+
+        await this.dataSource.query(`
             
             CREATE TABLE IF NOT EXISTS ${schemaName}.assets
                 (
@@ -31,7 +31,10 @@ export class AssetsScript{
                     asset_title text COLLATE pg_catalog."default",
                     manufacturer text COLLATE pg_catalog."default",
                     model_no text COLLATE pg_catalog."default",
-                    
+                    asset_project integer,
+                    asset_location integer,
+                    asset_cost_center integer,
+                    documents text COLLATE pg_catalog."default",
                     CONSTRAINT assets_asset_added_by_fkey FOREIGN KEY (asset_added_by)
                         REFERENCES ${schemaName}.users (user_id) MATCH SIMPLE
                         ON UPDATE NO ACTION
