@@ -65,7 +65,9 @@ import { OfflinePaymentRequest } from 'src/subscription_pricing/entity/offline_p
 import { PaymentMode } from 'src/subscription_pricing/entity/payment_mode.entity';
 import { CreatePaymentDto } from 'src/subscription_pricing/dto/payment.dto';
 import { PaymentTransaction } from 'src/subscription_pricing/entity/payment_transaction.entity';
-
+import { OrgFeatureOverride } from 'src/subscription_pricing/entity/org_feature_overrides.entity';
+import { CreateContactSalesRequestDto,UpdateContactSalesRequestDto } from 'src/subscription_pricing/dto/contact-sales-requests.dto';
+import { ContactSalesRequest } from 'src/subscription_pricing/entity/contact_sales_requests.entity';
 
 @Injectable()
 export class OrganizationService {
@@ -128,6 +130,12 @@ export class OrganizationService {
 
     @InjectRepository(PaymentTransaction)
     private paymentTransactionRepository: Repository<PaymentTransaction>,
+
+    @InjectRepository(OrgFeatureOverride)
+    private orgFeatureOverrideRepository: Repository<OrgFeatureOverride>,
+
+     @InjectRepository(ContactSalesRequest)
+    private contactSalesRepo: Repository<ContactSalesRequest>,
 
     // Inject the DatabaseService
   ) { }
@@ -395,7 +403,7 @@ async getPlansWithFeaturesByProducts(productId: number): Promise<any[]> {
       .leftJoinAndSelect('plan.billings', 'billing')
       .where('plan.is_active = :active', { active: true })
       .andWhere('plan.product_id = :productId', { productId }) // filter by product
-      .orderBy('plan.plan_name', 'ASC')
+      .orderBy('plan.plan_id', 'ASC')
       .addOrderBy('feature.feature_name', 'ASC')
       .getMany();
 
@@ -5259,6 +5267,7 @@ async getPlansWithFeaturesByProducts(productId: number): Promise<any[]> {
         .leftJoinAndSelect('sub.subscriptionType', 'subscriptionType')
         .leftJoinAndSelect('sub.billingInfo', 'billingInfo') // <-- BillingInfo relation
         .leftJoinAndSelect('sub.paymentTransactions', 'paymentTransactions') // <-- PaymentTransactions relation
+        .leftJoinAndSelect('sub.paymentMode', 'paymentMode')
         .where('sub.organization_profile_id = :organization_profile_id', {
           organization_profile_id,
         })
@@ -5333,11 +5342,22 @@ async getPlansWithFeaturesByProducts(productId: number): Promise<any[]> {
         start_date: subscription.start_date,
         renewal_date: subscription.renewal_date,
         payment_status: subscription.payment_status,
-        payment_mode: subscription.payment_mode,
+        // payment_mode: subscription.payment_mode,
+          payment_mode: subscription.paymentMode
+    ? {
+        id: subscription.paymentMode.payment_mode_id,
+        name: subscription.paymentMode.mode_name,
+      }
+    : null,
         purchase_date: subscription.purchase_date,
         plan_billing_id: subscription.plan_billing_id,
         auto_renewal: subscription.auto_renewal,
         features,
+        plan_cycle: subscription.plan_billing_id,
+        billing_id: subscription.sub_billing_id,
+        order_id: subscription.sub_order_id,
+        is_active_subscription: subscription.is_activated,
+
       };
     } catch (error) {
       console.error('Error fetching subscription details by org:', error);
@@ -5561,6 +5581,217 @@ async getAllUsersWithOrganization(
     console.error('Error fetching users with organization:', error);
     throw new BadRequestException(`Error fetching users: ${error.message}`);
   }
+}
+
+// async getOrgLimitations(orgId: number): Promise<any[]> {
+//   try {
+//     // 1️⃣ Fetch all active, non-deleted limitations for this org
+//     const limitations = await this.orgFeatureOverrideRepository
+//       .createQueryBuilder('override')
+//       .leftJoinAndSelect('override.feature', 'feature')
+//       .leftJoinAndSelect('override.mapping', 'mapping')
+//       .where('override.org_id = :orgId', { orgId })
+//       .andWhere('override.is_active = true')
+//       .andWhere('override.is_deleted = false')
+//       .orderBy('feature.feature_name', 'ASC')
+//       .getMany();
+
+//     // 2️⃣ Format data for frontend
+//     return limitations.map((item) => ({
+//       override_id: item.override_id,
+//       org_id: item.org_id,
+//       plan_id: item.plan_id,
+//       feature_id: item.feature_id,
+//       feature_name: item.feature?.feature_name || null,
+//       description: item.feature?.description || null,
+//       mapping_id: item.mapping_id,
+//       default_value: item.default_value,
+//       override_value: item.override_value,
+//       is_active: item.is_active,
+//       created_at: item.created_at,
+//       updated_at: item.updated_at,
+//     }));
+//   } catch (error) {
+//     console.error('Error fetching org limitations:', error);
+//     throw new Error('Failed to fetch organization limitations');
+//   }
+// }
+async getOrgLimitations(orgId: number): Promise<any[]> {
+  try {
+    // 1️⃣ Fetch all active, non-deleted limitations for this org (unique per feature)
+    const limitations = await this.orgFeatureOverrideRepository
+      .createQueryBuilder('override')
+      .leftJoin('override.feature', 'feature')
+      .leftJoin('override.mapping', 'mapping')
+      .addSelect([
+        'feature.feature_id',
+        'feature.feature_name',
+        'feature.description',
+        'mapping.mapping_id',
+      ])
+      .where('override.org_id = :orgId', { orgId })
+      .andWhere('override.is_active = true')
+      .andWhere('override.is_deleted = false')
+      // 🔹 PostgreSQL-only: ensures unique rows per feature_id
+      .distinctOn(['feature.feature_id'])
+      .orderBy('feature.feature_id', 'ASC')
+      .addOrderBy('override.created_at', 'DESC') // keeps latest override per feature
+      .getMany();
+
+    // 2️⃣ Format clean data for frontend
+    const formatted = limitations.map((item) => ({
+      override_id: item.override_id,
+      org_id: item.org_id,
+      plan_id: item.plan_id,
+      feature_id: item.feature_id,
+      feature_name: item.feature?.feature_name || null,
+      description: item.feature?.description || null,
+      mapping_id: item.mapping_id,
+      default_value: item.default_value,
+      override_value: item.override_value,
+      is_active: item.is_active,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
+
+    return formatted;
+  } catch (error) {
+    console.error('❌ Error fetching org limitations:', error);
+    throw new Error('Failed to fetch organization limitations');
+  }
+}
+
+async getAssetRestrictions(orgId: number): Promise<any[]> {
+  try {
+    const limitations = await this.orgFeatureOverrideRepository
+      .createQueryBuilder('override')
+      .leftJoin('override.feature', 'feature')
+      .leftJoin('override.mapping', 'mapping')
+      .addSelect([
+        'feature.feature_id',
+        'feature.feature_name',
+        'feature.description',
+        'mapping.mapping_id',
+      ])
+      .where('override.org_id = :orgId', { orgId })
+      .andWhere('override.is_active = true')
+      .andWhere('override.is_deleted = false')
+      .distinctOn(['feature.feature_id'])
+      .orderBy('feature.feature_id', 'ASC')
+      .addOrderBy('override.created_at', 'DESC')
+      .getMany();
+
+    // Format clean & typed data
+    const formatted = limitations.map((item) => {
+      let value: boolean | number | string = item.override_value;
+
+      // Convert value automatically
+      if (typeof value === 'string') {
+        const lower = value.toLowerCase();
+        if (lower === 'true' || lower === 'false') {
+          value = lower === 'true';
+        } else if (!isNaN(Number(value))) {
+          value = Number(value);
+        }
+      }
+
+      return {
+        feature_id: item.feature_id,
+        feature_name: item.feature?.feature_name || null,
+        description: item.feature?.description || null,
+        value, // auto-typed value (true/false/number)
+        default_value: item.default_value,
+      };
+    });
+
+    return formatted;
+  } catch (error) {
+    console.error('❌ Error fetching org limitations:', error);
+    throw new Error('Failed to fetch organization limitations');
+  }
+}
+
+ async createContactSalesRequest(createDto: CreateContactSalesRequestDto) {
+    // Create new entity instance
+    const newRequest = this.contactSalesRepo.create({
+      ...createDto,
+      status: createDto.status || 'Pending',
+      is_active: true,
+      is_deleted: false,
+    });
+
+    // Save to database
+    return await this.contactSalesRepo.save(newRequest);
+  }
+
+  async getRestrictionByFeatureId(orgId: number, featureId: number): Promise<any> {
+  try {
+    const override = await this.orgFeatureOverrideRepository
+      .createQueryBuilder('override')
+      .leftJoin('override.feature', 'feature')
+      .addSelect(['feature.feature_id', 'feature.feature_name', 'feature.description'])
+      .where('override.org_id = :orgId', { orgId })
+      .andWhere('feature.feature_id = :featureId', { featureId })
+      .andWhere('override.is_active = true')
+      .andWhere('override.is_deleted = false')
+      .orderBy('override.created_at', 'DESC')
+      .getOne();
+
+    if (!override) return null;
+
+    // Format & auto-type value
+    let value: boolean | number | string = override.override_value;
+    if (typeof value === 'string') {
+      const lower = value.toLowerCase();
+      if (lower === 'true' || lower === 'false') value = lower === 'true';
+      else if (!isNaN(Number(value))) value = Number(value);
+    }
+
+    return {
+      feature_id: override.feature?.feature_id || null,
+      feature_name: override.feature?.feature_name || null,
+      description: override.feature?.description || null,
+      value,
+      default_value: override.default_value,
+    };
+  } catch (error) {
+    console.error('❌ Error fetching feature restriction:', error);
+    throw new Error('Failed to fetch feature restriction');
+  }
+}
+
+async updateUsageCount(
+  orgId: number,
+  featureId: number,
+  currentValue: string, // can be text or number (stringified)
+) {
+  // 🔹 Find existing limitation record by org_id + feature_id
+  const existing = await this.orgFeatureOverrideRepository.findOne({
+    where: {
+      org_id: orgId,
+      feature_id: featureId,
+      is_deleted: false,
+    },
+  });
+
+  if (!existing) {
+    throw new NotFoundException(
+      `Limitation not found for org_id ${orgId} and feature_id ${featureId}`,
+    );
+  }
+
+  // 🔹 Update the current usage field
+  existing.currentUsage = currentValue;
+  existing.updated_at = new Date();
+
+  const saved = await this.orgFeatureOverrideRepository.save(existing);
+
+  return {
+    orgId: saved.org_id,
+    featureId: saved.feature_id,
+    currentUsage: saved.currentUsage,
+    updatedAt: saved.updated_at,
+  };
 }
 
 

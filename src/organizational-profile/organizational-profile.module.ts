@@ -40,7 +40,8 @@ import { PaymentMode } from 'src/subscription_pricing/entity/payment_mode.entity
 import { BillingInfo } from 'src/subscription_pricing/entity/billing_info.entity';
 import { OfflinePaymentRequest } from 'src/subscription_pricing/entity/offline_payment_requests.entity';
 import { PaymentTransaction } from 'src/subscription_pricing/entity/payment_transaction.entity';
-
+import { OrgFeatureOverride } from 'src/subscription_pricing/entity/org_feature_overrides.entity';
+import { ContactSalesRequest } from 'src/subscription_pricing/entity/contact_sales_requests.entity';
 dotenv.config(); // Load the .env file
 
 @Module({
@@ -51,7 +52,7 @@ dotenv.config(); // Load the .env file
     }),
     TypeOrmModule.forFeature([OrganizationalProfile,Branch, OrganizationVendors,
       Department,Designations,Roles, User, IndustryTypes, RolesPermission,
-      DepartmentConifg, DesignationsConfig, AssetDatum, RegisterUserLogin, RegisterOrganization, Locations, Pincodes,Session,Plan,OrgSubscription,PlanFeatureMapping,PaymentMode,BillingInfo,OfflinePaymentRequest, PaymentTransaction
+      DepartmentConifg, DesignationsConfig, AssetDatum, RegisterUserLogin, RegisterOrganization, Locations, Pincodes,Session,Plan,OrgSubscription,PlanFeatureMapping,PaymentMode,BillingInfo,OfflinePaymentRequest, PaymentTransaction, OrgFeatureOverride, ContactSalesRequest
     ]), DatabaseModule, MailModule, AuthModule, RolesPermissionsModule
   ],
   controllers: [OrganizationalProfileController],

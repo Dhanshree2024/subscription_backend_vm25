@@ -41,6 +41,7 @@ import { Session } from './organizational-profile/public_schema_entity/sessions.
 import { AssetStockSerialsRepository } from './assets-data/stocks/entities/asset_stock_serials.entity';
 import { SubscriptionModule } from './subscription_pricing/subscription.module';
 import { CronJobModule } from './common/cron_jobs/cronjob.module';
+import { ResellersModule } from './resellers/resellers.module';
 @Module({
 
   imports: [
@@ -112,7 +113,8 @@ import { CronJobModule } from './common/cron_jobs/cronjob.module';
     Locations,
     SubscriptionModule,
     Pincodes,
-    Session
+    Session,
+    ResellersModule
    
   ],
 

@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, QueryFailedError } from 'typeorm';
+import { firstValueFrom } from 'rxjs';
+import { HttpService } from '@nestjs/axios';
 import { Feature } from './entity/feature.entity';
 import { PlanBilling } from './entity/plan-billing.entity';
 import { PlanFeatureMapping } from './entity/plan-feature-mapping.entity';
@@ -65,6 +67,7 @@ import { LicenceTypesScript } from 'src/organization_register/onboarding_sql_scr
 import { AssetTransferHistoryScript } from 'src/organization_register/onboarding_sql_scripts/transferhistory';
 import { VendersScript } from 'src/organization_register/onboarding_sql_scripts/venders';
 import { UserScript } from 'src/organization_register/onboarding_sql_scripts/users';
+import { ContactSalesRequest } from './entity/contact_sales_requests.entity';
 
 import { OrganizationSchemaManager } from './utils/OrganisationSchemaManager';
 import { HrmsOrganizationSchemaManager } from './utils/HrmsOrganisationSchemaManager';
@@ -132,11 +135,16 @@ export class SubscriptionService {
     @InjectRepository(RenewalStatus)
     private readonly renewalStatusRepository: Repository<RenewalStatus>,
 
+    @InjectRepository(ContactSalesRequest)
+    private readonly salesrequestsRepository: Repository<ContactSalesRequest>,
+
     @InjectDataSource() private readonly dataSource: DataSource,
 
     private readonly mailConfigService: MailConfigService, // Inject service
 
     private readonly mailService: MailService,
+
+    private readonly httpService: HttpService,
   ) { }
 
   //create the subscription type
@@ -173,10 +181,10 @@ export class SubscriptionService {
 
   //create the plan
   async createPlan(payload: CreatePlanDto): Promise<Plan> {
-    const { plan_name, description, billing_cycle, price, subscription_type, product_id,    set_trial,              // new
-    trial_period,       // new
-    trial_period_count,      // new
-     } = payload;
+    const { plan_name, description, billing_cycle, price, subscription_type, product_id, set_trial,              // new
+      trial_period,       // new
+      trial_period_count,      // new
+    } = payload;
 
     // Check duplicate plan name
     const existing = await this.planRepository.findOne({ where: { plan_name } });
@@ -190,9 +198,9 @@ export class SubscriptionService {
       description,
       is_active: true,
       productId: product_id,
-        set_trial,            // ✅ add this
-  trial_period_unit: trial_period,  // ✅ add this
-  trial_period_count,   // ✅ add this
+      set_trial,            // ✅ add this
+      trial_period_unit: trial_period,  // ✅ add this
+      trial_period_count,   // ✅ add this
     });
     const savedPlan = await this.planRepository.save(plan);
 
@@ -213,8 +221,8 @@ export class SubscriptionService {
   // updatePlan in subscription.service.ts
   async updatePlan(plan_id: number, payload: any): Promise<Plan> {
     const { plan_name, description, billing_cycle, price, subscription_type, product_id, set_trial,              // new
-    trial_period,       // new
-    trial_period_count,      // new
+      trial_period,       // new
+      trial_period_count,      // new
 
     } = payload;
 
@@ -225,9 +233,11 @@ export class SubscriptionService {
     }
 
     // Update plan basic details
-    Object.assign(plan, { plan_name, description, productId: product_id,  set_trial,
-  trial_period_unit: payload.trial_period,
-  trial_period_count: payload.trial_period_count, });
+    Object.assign(plan, {
+      plan_name, description, productId: product_id, set_trial,
+      trial_period_unit: payload.trial_period,
+      trial_period_count: payload.trial_period_count,
+    });
     const updatedPlan = await this.planRepository.save(plan);
 
     //  Check if billing exists for this plan + cycle
@@ -571,9 +581,10 @@ export class SubscriptionService {
         .leftJoinAndSelect('org.users', 'users')
         .leftJoinAndSelect('sub.subscriptionType', 'subscriptionType')
         .leftJoinAndSelect('sub.billingInfo', 'billing')
+        .leftJoinAndSelect('sub.reseller', 'reseller')
         .leftJoinAndSelect('billing.paymentMethod', 'billingMethod')
         .leftJoinAndSelect('sub.paymentTransactions', 'payment')
-        .leftJoinAndSelect('sub.product', 'product') 
+        .leftJoinAndSelect('sub.product', 'product')
         .where('sub.subscription_id = :subscription_id', { subscription_id })
         .andWhere('sub.is_active = :isActive', { isActive: true })
         .getOne();
@@ -618,29 +629,29 @@ export class SubscriptionService {
       })) || [];
       // 4. Combine all data
 
-   // ✅ NEW PART: Fetch limitations for this subscription
-const limitations = await this.pricingOverrideRepo
-  .createQueryBuilder('lim') // changed alias from 'limit' → 'lim'
-  .leftJoinAndSelect('lim.feature', 'feature')
-  .where('lim.org_id = :orgId', { orgId: subscription.organization_profile_id }) // use org_id instead of subscription_id
-  .andWhere('lim.is_active = :active', { active: true })
-  .getMany();
-const featureslimit = limitations.map((lim) => {
-  const mapping = featureMappings.find(
-    (m) => m.feature?.feature_id === lim.feature_id
-  );
+      // ✅ NEW PART: Fetch limitations for this subscription
+      const limitations = await this.pricingOverrideRepo
+        .createQueryBuilder('lim') // changed alias from 'limit' → 'lim'
+        .leftJoinAndSelect('lim.feature', 'feature')
+        .where('lim.org_id = :orgId', { orgId: subscription.organization_profile_id }) // use org_id instead of subscription_id
+        .andWhere('lim.is_active = :active', { active: true })
+        .getMany();
+      const featureslimit = limitations.map((lim) => {
+        const mapping = featureMappings.find(
+          (m) => m.feature?.feature_id === lim.feature_id
+        );
 
-  return {
-    feature_id: lim.feature?.feature_id || mapping?.feature?.feature_id,
-    feature_name: lim.feature?.feature_name || mapping?.feature?.feature_name,
-    feature_value:
-      lim.override_value ??
-      mapping?.feature_value ??
-      mapping?.feature?.default_value ??
-      null,
-    is_trial: mapping?.is_trial ?? false,
-  };
-});
+        return {
+          feature_id: lim.feature?.feature_id || mapping?.feature?.feature_id,
+          feature_name: lim.feature?.feature_name || mapping?.feature?.feature_name,
+          feature_value:
+            lim.override_value ??
+            mapping?.feature_value ??
+            mapping?.feature?.default_value ??
+            null,
+          is_trial: mapping?.is_trial ?? false,
+        };
+      });
 
 
       return {
@@ -658,7 +669,7 @@ const featureslimit = limitations.map((lim) => {
         plan: {
           plan_id: subscription.plan.plan_id,
           plan_name: subscription.plan.plan_name,
-     
+
         },
         billing: billing ?? null,
         subscription_type: subscription.subscriptionType?.type_name ?? null,
@@ -683,13 +694,15 @@ const featureslimit = limitations.map((lim) => {
         plan_billing_id: subscription.plan_billing_id,
         discount: subscription.percentage,
         limitations_features: featureslimit,
+        resellerId: subscription.reseller_id,
         features,
         paymentTransactions,
         product_id: subscription.productId,
-         product: {
-        product_id: subscription.product?.productId || subscription.productId,
-        product_name: subscription.product?.name || null,
-      },
+        product: {
+          product_id: subscription.product?.productId || subscription.productId,
+          product_name: subscription.product?.name || null,
+        },
+        
       };
     } catch (error) {
       console.error('Error fetching subscription details:', error);
@@ -746,46 +759,130 @@ const featureslimit = limitations.map((lim) => {
   }
 
 
-//   async getOrganizationDetails(organization_id: number): Promise<any> {
-//   try {
-//     // 1️⃣ Fetch the organization along with its users
-//     const organization = await this.orgRepo.findOne({
-//       where: { organization_id },
-//       relations: ['users'],
-//     });
+  //   async getOrganizationDetails(organization_id: number): Promise<any> {
+  //   try {
+  //     // 1️⃣ Fetch the organization along with its users
+  //     const organization = await this.orgRepo.findOne({
+  //       where: { organization_id },
+  //       relations: ['users'],
+  //     });
 
-//     if (!organization) {
-//       throw new Error('Organization not found');
-//     }
+  //     if (!organization) {
+  //       throw new Error('Organization not found');
+  //     }
 
-//     // 2️⃣ Get primary user
-//     const primaryUser = organization.users?.find(u => u.is_primary_user === 'Y') || null;
+  //     // 2️⃣ Get primary user
+  //     const primaryUser = organization.users?.find(u => u.is_primary_user === 'Y') || null;
 
-//     // 3️⃣ Return the data
-//     return {
-//       organization_id: organization.organization_id,
-//       organization_name: organization.organization_name,
-//       organization_schema_name: organization.organization_schema_name,
-//       industry_type_id: organization.industry_type_id,
-//       primary_user: primaryUser
-//         ? {
-//             user_id: primaryUser.user_id,
-//             first_name: primaryUser.first_name,
-//             last_name: primaryUser.last_name,
-//             business_email: primaryUser.business_email,
-//             phone_number: primaryUser.phone_number,
-//           }
-//         : null,
-//     };
-//   } catch (error) {
-//     console.error('Error fetching organization details:', error);
-//     throw new Error('Failed to fetch organization details');
-//   }
-// }
+  //     // 3️⃣ Return the data
+  //     return {
+  //       organization_id: organization.organization_id,
+  //       organization_name: organization.organization_name,
+  //       organization_schema_name: organization.organization_schema_name,
+  //       industry_type_id: organization.industry_type_id,
+  //       primary_user: primaryUser
+  //         ? {
+  //             user_id: primaryUser.user_id,
+  //             first_name: primaryUser.first_name,
+  //             last_name: primaryUser.last_name,
+  //             business_email: primaryUser.business_email,
+  //             phone_number: primaryUser.phone_number,
+  //           }
+  //         : null,
+  //     };
+  //   } catch (error) {
+  //     console.error('Error fetching organization details:', error);
+  //     throw new Error('Failed to fetch organization details');
+  //   }
+  // }
+
+  // async getOrganizationDetails(organization_id: number): Promise<any> {
+  //   try {
+  //     // 1️⃣ Fetch organization + users + subscriptions + billing info
+  //     const organization = await this.orgRepo.findOne({
+  //       where: { organization_id },
+  //       relations: [
+  //         'users',
+  //         'subscriptions',
+  //         'subscriptions.billingInfo',
+  //         'subscriptions.billingInfo.paymentMethod',
+  //         'subscriptions.plan',
+  //         'subscriptions.subscriptionType',
+  //       ],
+  //     });
+
+  //     if (!organization) {
+  //       throw new Error('Organization not found');
+  //     }
+
+  //     // 2️⃣ Identify the primary user
+  //     const primaryUser = organization.users?.find(u => u.is_primary_user === 'Y') || null;
+
+  //     // 3️⃣ Get the most recent active subscription (if multiple exist)
+  //     const activeSubscription = organization.subscriptions?.find(s => s.is_active) || null;
+
+  //     // 4️⃣ Extract billing info if available
+  //     const billing = activeSubscription?.billingInfo?.[0]
+  //       ? {
+  //         first_name: activeSubscription.billingInfo[0].first_name,
+  //         last_name: activeSubscription.billingInfo[0].last_name,
+  //         email: activeSubscription.billingInfo[0].email,
+  //         phone_number: activeSubscription.billingInfo[0].phone_number,
+  //         method: activeSubscription.billingInfo[0].paymentMethod?.methodName || null,
+  //         same_as_primary_contact: activeSubscription.billingInfo[0].same_as_primary_contact,
+  //         orderplacedby: activeSubscription.billingInfo[0].orderplacedby,
+  //         paymentterm: activeSubscription.billingInfo[0].paymentterm,
+  //         customerpo: activeSubscription.billingInfo[0].customerpo,
+  //       }
+  //       : null;
+
+  //     // 5️⃣ Return consolidated data
+  //     return {
+  //       organization_id: organization.organization_id,
+  //       organization_name: organization.organization_name,
+  //       organization_schema_name: organization.organization_schema_name,
+  //       industry_type_id: organization.industry_type_id,
+  //       customer_id: organization.customer_id,
+  //       payment_term: organization.payment_term,
+  //       gst_registered: organization.gst_registered,
+  //       gst_number: organization.gst_number,
+  //       primary_user: primaryUser
+  //         ? {
+  //           user_id: primaryUser.user_id,
+  //           first_name: primaryUser.first_name,
+  //           last_name: primaryUser.last_name,
+  //           business_email: primaryUser.business_email,
+  //           phone_number: primaryUser.phone_number,
+  //         }
+  //         : null,
+
+  //       subscription: activeSubscription
+  //         ? {
+  //           subscription_id: activeSubscription.subscription_id,
+  //           plan_id: activeSubscription.plan_id,
+  //           plan_name: activeSubscription.plan?.plan_name,
+  //           subscription_type: activeSubscription.subscriptionType?.type_name,
+  //           price: activeSubscription.price,
+  //           discounted_price: activeSubscription.discounted_price,
+  //           grand_total: activeSubscription.grand_total,
+  //           payment_status: activeSubscription.payment_status,
+  //           payment_mode: activeSubscription.payment_mode,
+  //           start_date: activeSubscription.start_date,
+  //           renewal_date: activeSubscription.renewal_date,
+  //           is_trial_period: activeSubscription.is_trial_period,
+  //           auto_renewal: activeSubscription.auto_renewal,
+  //           billing,
+  //         }
+  //         : null,
+  //     };
+  //   } catch (error) {
+  //     console.error('Error fetching organization details:', error);
+  //     throw new Error('Failed to fetch organization details');
+  //   }
+  // }
 
 async getOrganizationDetails(organization_id: number): Promise<any> {
   try {
-    // 1️⃣ Fetch organization + users + subscriptions + billing info
     const organization = await this.orgRepo.findOne({
       where: { organization_id },
       relations: [
@@ -802,34 +899,51 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
       throw new Error('Organization not found');
     }
 
-    // 2️⃣ Identify the primary user
+    // 🧩 Identify the primary user
     const primaryUser = organization.users?.find(u => u.is_primary_user === 'Y') || null;
 
-    // 3️⃣ Get the most recent active subscription (if multiple exist)
-    const activeSubscription = organization.subscriptions?.find(s => s.is_active) || null;
+    // 🧩 Transform all subscriptions with related billing info
+    const subscriptions =
+      organization.subscriptions?.map(sub => ({
+        subscription_id: sub.subscription_id,
+        plan_id: sub.plan_id,
+        plan_name: sub.plan?.plan_name || null,
+        subscription_type: sub.subscriptionType?.type_name || null,
+        price: sub.price,
+        discounted_price: sub.discounted_price,
+        grand_total: sub.grand_total,
+        payment_status: sub.payment_status,
+        payment_mode: sub.payment_mode,
+        start_date: sub.start_date,
+        renewal_date: sub.renewal_date,
+        is_trial_period: sub.is_trial_period,
+        auto_renewal: sub.auto_renewal,
+        is_active: sub.is_active,
+        billing: sub.billingInfo?.[0]
+          ? {
+              first_name: sub.billingInfo[0].first_name,
+              last_name: sub.billingInfo[0].last_name,
+              email: sub.billingInfo[0].email,
+              phone_number: sub.billingInfo[0].phone_number,
+              method: sub.billingInfo[0].paymentMethod?.methodName || null,
+              same_as_primary_contact: sub.billingInfo[0].same_as_primary_contact,
+              orderplacedby: sub.billingInfo[0].orderplacedby,
+              paymentterm: sub.billingInfo[0].paymentterm,
+              customerpo: sub.billingInfo[0].customerpo,
+            }
+          : null,
+      })) || [];
 
-    // 4️⃣ Extract billing info if available
-    const billing = activeSubscription?.billingInfo?.[0]
-      ? {
-          first_name: activeSubscription.billingInfo[0].first_name,
-          last_name: activeSubscription.billingInfo[0].last_name,
-          email: activeSubscription.billingInfo[0].email,
-          phone_number: activeSubscription.billingInfo[0].phone_number,
-          method: activeSubscription.billingInfo[0].paymentMethod?.methodName || null,
-          same_as_primary_contact: activeSubscription.billingInfo[0].same_as_primary_contact,
-          orderplacedby: activeSubscription.billingInfo[0].orderplacedby,
-          paymentterm: activeSubscription.billingInfo[0].paymentterm,
-          customerpo: activeSubscription.billingInfo[0].customerpo,
-        }
-      : null;
-
-    // 5️⃣ Return consolidated data
+    // 🏁 Return everything
     return {
       organization_id: organization.organization_id,
       organization_name: organization.organization_name,
       organization_schema_name: organization.organization_schema_name,
       industry_type_id: organization.industry_type_id,
-
+      customer_id: organization.customer_id,
+      payment_term: organization.payment_term,
+      gst_registered: organization.gst_registered,
+      gst_number: organization.gst_number,
       primary_user: primaryUser
         ? {
             user_id: primaryUser.user_id,
@@ -839,32 +953,13 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
             phone_number: primaryUser.phone_number,
           }
         : null,
-
-      subscription: activeSubscription
-        ? {
-            subscription_id: activeSubscription.subscription_id,
-            plan_id: activeSubscription.plan_id,
-            plan_name: activeSubscription.plan?.plan_name,
-            subscription_type: activeSubscription.subscriptionType?.type_name,
-            price: activeSubscription.price,
-            discounted_price: activeSubscription.discounted_price,
-            grand_total: activeSubscription.grand_total,
-            payment_status: activeSubscription.payment_status,
-            payment_mode: activeSubscription.payment_mode,
-            start_date: activeSubscription.start_date,
-            renewal_date: activeSubscription.renewal_date,
-            is_trial_period: activeSubscription.is_trial_period,
-            auto_renewal: activeSubscription.auto_renewal,
-            billing,
-          }
-        : null,
+      subscriptions, // <-- now returning all
     };
   } catch (error) {
     console.error('Error fetching organization details:', error);
     throw new Error('Failed to fetch organization details');
   }
 }
-
 
   async updateOrgSubscription(
     subscription_id: number,
@@ -1004,7 +1099,7 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
   ) {
     const updatesArray = Array.isArray(updates) ? updates : [updates];
 
-    return await this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const updatedPricing: OrgFeatureOverride[] = [];
       const updatedPublic: OrgOverride[] = [];
       const logs: OrgFeatureOverrideLog[] = [];
@@ -1098,6 +1193,37 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
 
       return { pricing: updatedPricing, public: updatedPublic, logs };
     });
+
+  // Call Asset backend to sync the same changes
+  // ===========================================================
+  const assetApiUrl = `${process.env.ASSET_API_URL}/organization/update-asset-limitations`;
+
+  try {
+    const payload = {
+      billingOrgId: org_id,
+      limitations: updatesArray.map((u) => ({
+        feature_id: u.feature_id,
+        plan_id: u.plan_id,
+        mapping_id: u.mapping_id,
+        override_value: u.override_value,
+        default_value: u.default_value,
+        is_active: u.is_active,
+        is_deleted: u.is_deleted,
+      })),
+    };
+
+    const assetResponse = await firstValueFrom(
+      this.httpService.post(assetApiUrl, payload),
+    );
+
+    console.log(
+      `✅ Synced override updates to Asset DB for org ${org_id}:`,
+      assetResponse.data?.message || 'Success',
+    );
+  } catch (err) {
+    console.error(`⚠️ Failed to sync overrides to Asset DB for org ${org_id}:`, err.message);
+  }
+  return result;
   }
 
 
@@ -1151,9 +1277,9 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
       // const qb = this.featureRepository.createQueryBuilder('f');
       const qb = this.featureRepository
         .createQueryBuilder('f')
-        .leftJoinAndSelect('f.product', 'p'); // ✅ join product
+        .leftJoinAndSelect('f.product', 'p') // ✅ join product
       // Always exclude soft-deleted
-      // qb.andWhere('f.is_deleted = false');
+       qb.andWhere('f.is_deleted = false');
 
       if (search) {
         qb.andWhere(
@@ -1195,14 +1321,14 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
       const qb = this.planRepository.createQueryBuilder('p')
         .leftJoinAndSelect('p.billings', 'b')
         .leftJoinAndSelect('p.product', 'prod')
-              .loadRelationCountAndMap(
-        'p.organization_count', // maps the count to p.organization_count
-        'p.subscriptions', // relation to count
-        'subs', // alias for OrgSubscription
-        (qb) => qb
-          .where('subs.is_active = true')
-          .andWhere('subs.is_activated = true'),
-      );
+        .loadRelationCountAndMap(
+          'p.organization_count', // maps the count to p.organization_count
+          'p.subscriptions', // relation to count
+          'subs', // alias for OrgSubscription
+          (qb) => qb
+            .where('subs.is_active = true')
+            .andWhere('subs.is_activated = true'),
+        );
 
       if (search) {
         qb.andWhere('(LOWER(p.plan_name) LIKE :search OR LOWER(p.description) LIKE :search)', {
@@ -1241,7 +1367,8 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
         .leftJoinAndSelect('fm.plan', 'p')
         .leftJoinAndSelect('fm.feature', 'f')
         .leftJoinAndSelect('p.billings', 'b') // safely join billings
-        .leftJoinAndSelect('fm.product', 'pr');
+        .leftJoinAndSelect('fm.product', 'pr')
+        .where('fm.status = :mappingStatus', { mappingStatus: 'Active' });
 
       // Search filter
       if (search) {
@@ -1479,52 +1606,52 @@ async getOrganizationDetails(organization_id: number): Promise<any> {
 
   //   return mappings;
   // }
-async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
-  const mappings: PlanFeatureMapping[] = [];
+  async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
+    const mappings: PlanFeatureMapping[] = [];
 
-  // Combine both feature sets with a flag
-  const allFeatures = [
-    ...(payload.features || []).map(f => ({ ...f, isTrial: false })),
-    ...(payload.trial_features || []).map(f => ({ ...f, isTrial: true })),
-  ];
+    // Combine both feature sets with a flag
+    const allFeatures = [
+      ...(payload.features || []).map(f => ({ ...f, isTrial: false })),
+      ...(payload.trial_features || []).map(f => ({ ...f, isTrial: true })),
+    ];
 
-  for (const f of allFeatures) {
-    const featureValue = f.limit === "" ? null : f.limit;
+    for (const f of allFeatures) {
+      const featureValue = f.limit === "" ? null : f.limit;
 
-    // Check existing mapping for same product, plan, feature & trial flag
-    const existing = await this.planFeatureMappingRepository.findOne({
-      where: {
-        product_id: payload.product_id,
-        plan_id: payload.plan_id,
-        feature_id: f.feature_id,
-        is_trial: f.isTrial, // 👈 add this column in entity if not present
-      },
-    });
-
-    if (existing) {
-      // 🔄 Update existing
-      existing.feature_value = featureValue;
-      existing.status = payload.status || "Active";
-      const updated = await this.planFeatureMappingRepository.save(existing);
-      mappings.push(updated);
-    } else {
-      // 🆕 Create new mapping
-      const newMapping = this.planFeatureMappingRepository.create({
-        product_id: payload.product_id,
-        plan_id: payload.plan_id,
-        feature_id: f.feature_id,
-        feature_value: featureValue,
-        status: payload.status || "Active",
-        is_trial: f.isTrial, // 👈 differentiate trial vs normal
+      // Check existing mapping for same product, plan, feature & trial flag
+      const existing = await this.planFeatureMappingRepository.findOne({
+        where: {
+          product_id: payload.product_id,
+          plan_id: payload.plan_id,
+          feature_id: f.feature_id,
+          is_trial: f.isTrial, // 👈 add this column in entity if not present
+        },
       });
 
-      const saved = await this.planFeatureMappingRepository.save(newMapping);
-      mappings.push(saved);
-    }
-  }
+      if (existing) {
+        // 🔄 Update existing
+        existing.feature_value = featureValue;
+        existing.status = payload.status || "Active";
+        const updated = await this.planFeatureMappingRepository.save(existing);
+        mappings.push(updated);
+      } else {
+        // 🆕 Create new mapping
+        const newMapping = this.planFeatureMappingRepository.create({
+          product_id: payload.product_id,
+          plan_id: payload.plan_id,
+          feature_id: f.feature_id,
+          feature_value: featureValue,
+          status: payload.status || "Active",
+          is_trial: f.isTrial, // 👈 differentiate trial vs normal
+        });
 
-  return mappings;
-}
+        const saved = await this.planFeatureMappingRepository.save(newMapping);
+        mappings.push(saved);
+      }
+    }
+
+    return mappings;
+  }
 
   async updateMapping(mapping_id: number, payload: UpdateMappingDto): Promise<PlanFeatureMapping> {
     // find existing mapping
@@ -1905,6 +2032,7 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
         .createQueryBuilder('billing')
         .leftJoinAndSelect('billing.orgSubscription', 'sub')
         .leftJoinAndSelect('sub.plan', 'plan')
+        .leftJoinAndSelect('sub.reseller', 'reseller')
         .leftJoinAndSelect('billing.product', 'product')
         .orderBy('billing.created_at', 'DESC');
       qb.andWhere('billing.method_id = :methodId', { methodId: 5 });
@@ -1959,6 +2087,13 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
                 plan_name: b.orgSubscription.plan.plan_name,
               }
               : null,
+            reseller: b.orgSubscription.reseller
+              ? {
+                  reseller_id: b.orgSubscription.reseller.reseller_id,
+                  reseller_name: b.orgSubscription.reseller.reseller_name,
+                }
+              : null,
+
           }
           : null,
       }));
@@ -2049,10 +2184,10 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
             description: sub.plan?.description,
             set_trial: sub.plan?.set_trial,
           },
-        product: {
-          product_id: sub.product?.product_id,
-          product_name: sub.product?.name || null,
-        },
+          product: {
+            product_id: sub.product?.product_id,
+            product_name: sub.product?.name || null,
+          },
         };
 
         if (sub.is_trial_period) {
@@ -2070,18 +2205,18 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
   }
 
   // Get all renewals
-    async getRenewals(
+  async getRenewals(
     page: number,
     limit: number,
     search: string,
     status: 'All' | 'Active' | 'Inactive' | 'Trial' | 'Live',
-      filters?: {
-    renewalStatus?: string;
-    quoteStatus?: string;
-    startDate?: string;
-    endDate?: string;
-    plan?: string;
-  },
+    filters?: {
+      renewalStatus?: string;
+      quoteStatus?: string;
+      startDate?: string;
+      endDate?: string;
+      plan?: string;
+    },
 
   ): Promise<{ trial: any[]; live: any[]; total: number }> {
     try {
@@ -2090,6 +2225,8 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
         .leftJoinAndSelect('subscription.plan', 'plan')
         .leftJoinAndSelect('subscription.organization', 'org')
         .leftJoinAndSelect('subscription.renewalStatus', 'renewalStatus') // 🔹 join renewal status
+        .leftJoinAndSelect('subscription.billingInfo', 'billingInfo')
+        .leftJoinAndSelect('subscription.reseller', 'reseller') 
         .addSelect(['org.organization_name', 'renewalStatus.status_name', 'renewalStatus.status_id'])
         .addSelect(['org.organization_name'])
         .orderBy('subscription.renewal_date', 'DESC');
@@ -2117,41 +2254,41 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
       }
 
 
-          // ✅ 🔹 Apply Additional Filters (from frontend)
-    if (filters) {
-      const { renewalStatus, quoteStatus, startDate, endDate, plan } = filters;
+      // ✅ 🔹 Apply Additional Filters (from frontend)
+      if (filters) {
+        const { renewalStatus, quoteStatus, startDate, endDate, plan } = filters;
 
-      // Renewal Status Filter
-      if (renewalStatus && renewalStatus !== 'All') {
-        // Use subscription.renewal_status (numeric id) instead of status_name
-        qb.andWhere('subscription.renewal_status = :rStatusId', {
-          rStatusId: Number(renewalStatus),
-        });
+        // Renewal Status Filter
+        if (renewalStatus && renewalStatus !== 'All') {
+          // Use subscription.renewal_status (numeric id) instead of status_name
+          qb.andWhere('subscription.renewal_status = :rStatusId', {
+            rStatusId: Number(renewalStatus),
+          });
+        }
+
+
+        // Quote Status Filter (if your subscription table has a column for it)
+        if (quoteStatus && quoteStatus !== 'All') {
+          qb.andWhere('subscription.quote_status = :qStatus', { qStatus: quoteStatus });
+        }
+
+        // Plan Filter
+        if (plan && plan !== 'All') {
+          qb.andWhere('plan.plan_id = :planId', { planId: Number(plan) });
+        }
+
+        // Date Range Filter
+        if (startDate && endDate) {
+          qb.andWhere('subscription.renewal_date BETWEEN :start AND :end', {
+            start: `${startDate} 00:00:00`,
+            end: `${endDate} 23:59:59`,
+          });
+        } else if (startDate) {
+          qb.andWhere('subscription.renewal_date >= :start', { start: `${startDate} 00:00:00` });
+        } else if (endDate) {
+          qb.andWhere('subscription.renewal_date <= :end', { end: `${endDate} 23:59:59` });
+        }
       }
-
-
-      // Quote Status Filter (if your subscription table has a column for it)
-      if (quoteStatus && quoteStatus !== 'All') {
-        qb.andWhere('subscription.quote_status = :qStatus', { qStatus: quoteStatus });
-      }
-
-      // Plan Filter
-      if (plan && plan !== 'All') {
-        qb.andWhere('plan.plan_id = :planId', { planId: Number(plan) });
-      }
-
-      // Date Range Filter
-      if (startDate && endDate) {
-        qb.andWhere('subscription.renewal_date BETWEEN :start AND :end', {
-         start: `${startDate} 00:00:00`,
-         end: `${endDate} 23:59:59`,
-        });
-      } else if (startDate) {
-        qb.andWhere('subscription.renewal_date >= :start', { start: `${startDate} 00:00:00` });
-      } else if (endDate) {
-        qb.andWhere('subscription.renewal_date <= :end', { end: `${endDate} 23:59:59` });
-      }
-    }
 
       // 🔹 Fetch paginated subscriptions
       const [subscriptions, total] = await qb
@@ -2164,6 +2301,8 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
       const live: any[] = [];
 
       subscriptions.forEach((sub: any) => {
+        const billing = Array.isArray(sub.billingInfo) ? sub.billingInfo[0] : sub.billingInfo;
+
         const mapped = {
           subscription_id: sub.subscription_id,
           organization_profile_id: sub.organization_profile_id,
@@ -2176,6 +2315,7 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
           is_trial_period: sub.is_trial_period,
           is_active: sub.is_active,
           plan_billing_id: sub.plan_billing_id,
+          invoice_number: sub.invoice_number,
           renewal: sub.auto_renewal,
           plan: {
             plan_id: sub.plan?.plan_id,
@@ -2184,11 +2324,45 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
             set_trial: sub.plan?.set_trial,
           },
           renewalStatus: sub.renewalStatus
-          ? {
+            ? {
               status_id: sub.renewalStatus.status_id,
               status_name: sub.renewalStatus.status_name,
             }
-          : null,
+            : null,
+          billingInfo: billing
+            ? {
+              billing_id: billing.billing_id,
+              first_name: billing.first_name,
+              last_name: billing.last_name,
+              email: billing.email,
+              phone_number: billing.phone_number,
+              company_name: billing.company_name,
+              address_line1: billing.address_line1,
+              address_line2: billing.address_line2,
+              city: billing.city,
+              state: billing.state,
+              postal_code: billing.postal_code,
+              country: billing.country,
+              gst_number: billing.gst_number,
+              tax_id: billing.tax_id,
+              paymentterm: billing.paymentterm,
+              customerpo: billing.customerpo,
+              same_as_primary_contact: billing.same_as_primary_contact,
+              created_at: billing.created_at,
+            }
+            : null,
+            reseller: sub.reseller
+            ? {
+                reseller_id: sub.reseller.reseller_id,
+                reseller_name: sub.reseller.reseller_name,
+                contact_first_name: sub.reseller.contact_first_name,
+                contact_last_name: sub.reseller.contact_last_name,
+                email: sub.reseller.email,
+                phone_number: sub.reseller.phone_number,
+                is_active: sub.reseller.is_active,
+              }
+            : null,
+
         };
 
         if (sub.is_trial_period) {
@@ -2442,52 +2616,56 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
 
   //
   async getAllOrganizationsWithPrimaryUsers(
-  page: number,
-  limit: number,
-  search: string,
-): Promise<{ organizations: any[]; total: number }> {
-  try {
-    const qb = this.registerUser
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.organization', 'org')
-      .where('user.is_primary_user = :primary', { primary: 'Y' })
-      .orderBy('org.organization_name', 'ASC');
+    page: number,
+    limit: number,
+    search: string,
+  ): Promise<{ organizations: any[]; total: number }> {
+    try {
+      const qb = this.registerUser
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.organization', 'org')
+        .where('user.is_primary_user = :primary', { primary: 'Y' })
+        .orderBy('org.organization_name', 'ASC');
 
-    // 🔹 Apply search on organization name or primary user name/email
-    if (search) {
-      qb.andWhere(
-        '(LOWER(org.organization_name) LIKE :search OR LOWER(user.first_name) LIKE :search OR LOWER(user.last_name) LIKE :search OR LOWER(user.business_email) LIKE :search)',
-        { search: `%${search.toLowerCase()}%` },
-      );
+      // 🔹 Apply search on organization name or primary user name/email
+      if (search) {
+        qb.andWhere(
+          '(LOWER(org.organization_name) LIKE :search OR LOWER(user.first_name) LIKE :search OR LOWER(user.last_name) LIKE :search OR LOWER(user.business_email) LIKE :search)',
+          { search: `%${search.toLowerCase()}%` },
+        );
+      }
+
+      // 🔹 Pagination
+      const [users, total] = await qb
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount();
+
+      // 🔹 Map to return organization + primary user
+      const mappedOrgs = users.map((user: any) => ({
+        organization_id: user.organization.organization_id,
+        organization_name: user.organization.organization_name,
+        customer_id: user.organization.customer_id,
+        gst_number: user.organization.gst_number,
+        organization_schema_name: user.organization.organization_schema_name,
+        industry_type_id: user.organization.industry_type_id,
+        status: user.organization.status,
+
+        primary_user: {
+          user_id: user.user_id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          business_email: user.business_email,
+          phone_number: user.phone_number,
+        },
+      }));
+
+      return { organizations: mappedOrgs, total };
+    } catch (error) {
+      console.error('Error fetching organizations with primary users:', error);
+      throw new Error('Failed to fetch organizations with primary users');
     }
-
-    // 🔹 Pagination
-    const [users, total] = await qb
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
-
-    // 🔹 Map to return organization + primary user
-    const mappedOrgs = users.map((user: any) => ({
-      organization_id: user.organization.organization_id,
-      organization_name: user.organization.organization_name,
-      organization_schema_name: user.organization.organization_schema_name,
-      industry_type_id: user.organization.industry_type_id,
-      primary_user: {
-        user_id: user.user_id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        business_email: user.business_email,
-        phone_number: user.phone_number,
-      },
-    }));
-
-    return { organizations: mappedOrgs, total };
-  } catch (error) {
-    console.error('Error fetching organizations with primary users:', error);
-    throw new Error('Failed to fetch organizations with primary users');
   }
-}
 
 
   async createCustomer(
@@ -2633,6 +2811,10 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
         organization_name: companyName,
         organization_schema_name: schemaName,
         industry_type_id: industryId,
+        customer_id: createOrganizationDto.customerId || null,
+        payment_term: createOrganizationDto.paymentTerm || null,
+        gst_registered: createOrganizationDto.gstRegistered ?? false,
+        gst_number: createOrganizationDto.gstRegistered ? createOrganizationDto.gstNumber : null,
       });
 
       const savedOrg = await this.orgRepo.save(organization);
@@ -3180,499 +3362,502 @@ async createMapping(payload: CreateMappingDto): Promise<PlanFeatureMapping[]> {
   // }
 
   ///////////
-//   async createOrUpdateOrder(orderDto: CreateOrderDto, context: any): Promise<any> {
-//     const {
-//       organizationId,
-//       planId,
-//       billingCycle,
-//       startDate,
-//       endDate,
-//       price,
-//       autoRenewal,
-//       isTrialPeriod,
-//       paymentMethodId,
-//       paymentTerm,
-//       customerPO,
-//       paymentStatus,
-//       orderPlacedBy,
-//       productId
-//     } = orderDto;
-//   console.log('Incoming Order DTO:', orderDto);
-//   console.log('Context:', context);
-//     if (!organizationId || !planId || !billingCycle || !price || !productId) {
-//       throw new BadRequestException({ statusCode: 400, message: "Missing required fields." });
-//     }
+  //   async createOrUpdateOrder(orderDto: CreateOrderDto, context: any): Promise<any> {
+  //     const {
+  //       organizationId,
+  //       planId,
+  //       billingCycle,
+  //       startDate,
+  //       endDate,
+  //       price,
+  //       autoRenewal,
+  //       isTrialPeriod,
+  //       paymentMethodId,
+  //       paymentTerm,
+  //       customerPO,
+  //       paymentStatus,
+  //       orderPlacedBy,
+  //       productId
+  //     } = orderDto;
+  //   console.log('Incoming Order DTO:', orderDto);
+  //   console.log('Context:', context);
+  //     if (!organizationId || !planId || !billingCycle || !price || !productId) {
+  //       throw new BadRequestException({ statusCode: 400, message: "Missing required fields." });
+  //     }
 
-//     try {
-//       // 1️⃣ Fetch organization and its users
-//       const organization = await this.orgRepo.findOne({
-//         where: { organization_id: organizationId },
-//         relations: ["users"],
-//       });
-// console.log('Fetched Organization:', organization);
-//       if (!organization) throw new BadRequestException({ statusCode: 404, message: "Organization not found." });
+  //     try {
+  //       // 1️⃣ Fetch organization and its users
+  //       const organization = await this.orgRepo.findOne({
+  //         where: { organization_id: organizationId },
+  //         relations: ["users"],
+  //       });
+  // console.log('Fetched Organization:', organization);
+  //       if (!organization) throw new BadRequestException({ statusCode: 404, message: "Organization not found." });
 
-//       const primaryUser = organization.users?.[0]; // first user as main contact
-//   console.log('Primary User:', primaryUser);
-//       // 2️⃣ Create or update subscription for the specific product
-//       const today = new Date();
-//       const renewalDate = endDate ? new Date(endDate) : new Date(today);
-//       if (!endDate) {
-//         if (billingCycle === "monthly") renewalDate.setMonth(renewalDate.getMonth() + 1);
-//         else if (billingCycle === "yearly") renewalDate.setFullYear(renewalDate.getFullYear() + 1);
-//       }
-//     console.log(' Calculated Renewal Date:', renewalDate);
+  //       const primaryUser = organization.users?.[0]; // first user as main contact
+  //   console.log('Primary User:', primaryUser);
+  //       // 2️⃣ Create or update subscription for the specific product
+  //       const today = new Date();
+  //       const renewalDate = endDate ? new Date(endDate) : new Date(today);
+  //       if (!endDate) {
+  //         if (billingCycle === "monthly") renewalDate.setMonth(renewalDate.getMonth() + 1);
+  //         else if (billingCycle === "yearly") renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+  //       }
+  //     console.log(' Calculated Renewal Date:', renewalDate);
 
-//       let subscription = await this.subscriptionRepository.findOne({
-//         where: { organization_profile_id: organizationId,productId: productId}, // key change
-//       });
+  //       let subscription = await this.subscriptionRepository.findOne({
+  //         where: { organization_profile_id: organizationId,productId: productId}, // key change
+  //       });
 
-//        console.log(' Existing Subscription:', subscription);
+  //        console.log(' Existing Subscription:', subscription);
 
-//       if (!subscription) {
-//          console.log(' Creating new subscription');
-//         const subBillingId = await this.generateBillingId();
-//         const subOrderId = await this.generateOrderId();
+  //       if (!subscription) {
+  //          console.log(' Creating new subscription');
+  //         const subBillingId = await this.generateBillingId();
+  //         const subOrderId = await this.generateOrderId();
 
-//         subscription = this.subscriptionRepository.create({
-//           organization_profile_id: organizationId,
-//           productId,
-//           plan_id: planId,
-//           plan_billing_id: billingCycle,
-//           subscription_type_id: 1,
-//           start_date: new Date(startDate) || today,
-//           renewal_date: renewalDate,
-//           price: Number(price),
-//           auto_renewal: autoRenewal,
-//           is_trial_period: isTrialPeriod,
-//           grand_total: 0,
-//           payment_status: paymentStatus as 'pending' | 'completed' | 'failed',
-//           sub_billing_id: subBillingId,
-//           sub_order_id: subOrderId,
-//           created_by: context.userId,
-//           purchase_date: today,
-//           payment_mode: String(paymentMethodId),
-//           is_activated: true,
-//         });
-//       } else {
-//         console.log(' Updating existing subscription');
-//         // update existing subscription
-//         subscription.plan_billing_id = billingCycle;
-//         subscription.plan_id = planId;
-//         subscription.start_date = new Date(startDate) || subscription.start_date;
-//         subscription.renewal_date = renewalDate;
-//         subscription.price = Number(price);
-//         subscription.auto_renewal = autoRenewal;
-//         subscription.is_trial_period = isTrialPeriod;
-//         subscription.grand_total = 0;
-//         subscription.payment_status = paymentStatus as 'pending' | 'completed' | 'failed';
-//         subscription.purchase_date = today;
-//         subscription.payment_mode = String(paymentMethodId);
-//         subscription.is_active = true;
-//         subscription.is_activated = true;
-//         subscription.productId = productId;
-//       }
+  //         subscription = this.subscriptionRepository.create({
+  //           organization_profile_id: organizationId,
+  //           productId,
+  //           plan_id: planId,
+  //           plan_billing_id: billingCycle,
+  //           subscription_type_id: 1,
+  //           start_date: new Date(startDate) || today,
+  //           renewal_date: renewalDate,
+  //           price: Number(price),
+  //           auto_renewal: autoRenewal,
+  //           is_trial_period: isTrialPeriod,
+  //           grand_total: 0,
+  //           payment_status: paymentStatus as 'pending' | 'completed' | 'failed',
+  //           sub_billing_id: subBillingId,
+  //           sub_order_id: subOrderId,
+  //           created_by: context.userId,
+  //           purchase_date: today,
+  //           payment_mode: String(paymentMethodId),
+  //           is_activated: true,
+  //         });
+  //       } else {
+  //         console.log(' Updating existing subscription');
+  //         // update existing subscription
+  //         subscription.plan_billing_id = billingCycle;
+  //         subscription.plan_id = planId;
+  //         subscription.start_date = new Date(startDate) || subscription.start_date;
+  //         subscription.renewal_date = renewalDate;
+  //         subscription.price = Number(price);
+  //         subscription.auto_renewal = autoRenewal;
+  //         subscription.is_trial_period = isTrialPeriod;
+  //         subscription.grand_total = 0;
+  //         subscription.payment_status = paymentStatus as 'pending' | 'completed' | 'failed';
+  //         subscription.purchase_date = today;
+  //         subscription.payment_mode = String(paymentMethodId);
+  //         subscription.is_active = true;
+  //         subscription.is_activated = true;
+  //         subscription.productId = productId;
+  //       }
 
-//       const savedSub = await this.subscriptionRepository.save(subscription);
-//     console.log(' Saved Subscription:', savedSub);
+  //       const savedSub = await this.subscriptionRepository.save(subscription);
+  //     console.log(' Saved Subscription:', savedSub);
 
-//       // 3️⃣ Save billing info
-//       let billing = await this.billingInfoRepository.findOne({ where: { org_subscription_id: savedSub.subscription_id } });
-//           console.log(' Existing Billing:', billing);
+  //       // 3️⃣ Save billing info
+  //       let billing = await this.billingInfoRepository.findOne({ where: { org_subscription_id: savedSub.subscription_id } });
+  //           console.log(' Existing Billing:', billing);
 
-//       if (!billing) {
-//         console.log(' Creating new billing info');
-//         billing = this.billingInfoRepository.create({
-//           org_subscription_id: savedSub.subscription_id,
-//           orderplacedby: orderPlacedBy,
-//           paymentterm: paymentTerm,
-//           customerpo: customerPO,
-//           methodId: paymentMethodId || 5,
-//           company_name: organization.organization_name,
-//           first_name: primaryUser?.first_name,
-//           last_name: primaryUser?.last_name,
-//           email: primaryUser?.business_email,
-//           phone_number: primaryUser?.phone_number,
-//           productId,
-//           created_at: new Date(),
-//           updated_at: new Date(),
-//         });
-//       } else {
-//          console.log('Updating existing billing info');
-//         billing.methodId = paymentMethodId || billing.methodId;
-//         billing.orderplacedby = orderPlacedBy;
-//         billing.paymentterm = paymentTerm;
-//         billing.customerpo = customerPO;
-//         billing.methodId = paymentMethodId || billing.methodId;
-//         billing.company_name = organization.organization_name;
-//         billing.first_name = primaryUser?.first_name;
-//         billing.last_name = primaryUser?.last_name;
-//         billing.email = primaryUser?.business_email;
-//         billing.phone_number = primaryUser?.phone_number;
-//         billing.productId = productId;
-//         billing.updated_at = new Date();
-//       }
-//       const savedBilling = await this.billingInfoRepository.save(billing);
-//       //
-//             if (productId === 1) {
-//         const schemaManager = new OrganizationSchemaManager(
-//           this.dataSource,
-//           this.mailConfigService,
-//           this.mailService,
-//         );
+  //       if (!billing) {
+  //         console.log(' Creating new billing info');
+  //         billing = this.billingInfoRepository.create({
+  //           org_subscription_id: savedSub.subscription_id,
+  //           orderplacedby: orderPlacedBy,
+  //           paymentterm: paymentTerm,
+  //           customerpo: customerPO,
+  //           methodId: paymentMethodId || 5,
+  //           company_name: organization.organization_name,
+  //           first_name: primaryUser?.first_name,
+  //           last_name: primaryUser?.last_name,
+  //           email: primaryUser?.business_email,
+  //           phone_number: primaryUser?.phone_number,
+  //           productId,
+  //           created_at: new Date(),
+  //           updated_at: new Date(),
+  //         });
+  //       } else {
+  //          console.log('Updating existing billing info');
+  //         billing.methodId = paymentMethodId || billing.methodId;
+  //         billing.orderplacedby = orderPlacedBy;
+  //         billing.paymentterm = paymentTerm;
+  //         billing.customerpo = customerPO;
+  //         billing.methodId = paymentMethodId || billing.methodId;
+  //         billing.company_name = organization.organization_name;
+  //         billing.first_name = primaryUser?.first_name;
+  //         billing.last_name = primaryUser?.last_name;
+  //         billing.email = primaryUser?.business_email;
+  //         billing.phone_number = primaryUser?.phone_number;
+  //         billing.productId = productId;
+  //         billing.updated_at = new Date();
+  //       }
+  //       const savedBilling = await this.billingInfoRepository.save(billing);
+  //       //
+  //             if (productId === 1) {
+  //         const schemaManager = new OrganizationSchemaManager(
+  //           this.dataSource,
+  //           this.mailConfigService,
+  //           this.mailService,
+  //         );
 
-//         // Call the method
+  //         // Call the method
 
-//         await schemaManager.createOrganizationSchemaAndTables(primaryUser);
-//       } else {
-//         // Run HRMS organization schema logic
-//         const hrmsSchemaManager = new HrmsOrganizationSchemaManager(
-//           this.dataSource,
-//           this.mailConfigService,
-//           this.mailService,
-//         );
+  //         await schemaManager.createOrganizationSchemaAndTables(primaryUser);
+  //       } else {
+  //         // Run HRMS organization schema logic
+  //         const hrmsSchemaManager = new HrmsOrganizationSchemaManager(
+  //           this.dataSource,
+  //           this.mailConfigService,
+  //           this.mailService,
+  //         );
 
-//         await hrmsSchemaManager.createOrganizationSchemaAndTables(primaryUser);
-//       }
-//       // Mail template
-//       // 4️⃣ Send Order Confirmation Email
-//         try {
-//           const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
+  //         await hrmsSchemaManager.createOrganizationSchemaAndTables(primaryUser);
+  //       }
+  //       // Mail template
+  //       // 4️⃣ Send Order Confirmation Email
+  //         try {
+  //           const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
 
-//           const fullName =
-//             (primaryUser?.first_name && primaryUser?.last_name)
-//               ? `${primaryUser.first_name} ${primaryUser.last_name}`
-//               : organization.organization_name;
+  //           const fullName =
+  //             (primaryUser?.first_name && primaryUser?.last_name)
+  //               ? `${primaryUser.first_name} ${primaryUser.last_name}`
+  //               : organization.organization_name;
 
-//           console.log("📧 Sending order confirmation email to:", primaryUser?.business_email);
+  //           console.log("📧 Sending order confirmation email to:", primaryUser?.business_email);
 
-//           await this.mailService.sendEmail(
-//             primaryUser?.business_email,
-//             'Your Subscription Order Has Been Placed Successfully',
-//             await renderEmail(
-//               EmailTemplate.ORDER_PLACED,
-//               {
-//                 name: orderPlacedBy,
-//                 email: primaryUser?.business_email,
-//                 companyName: organization.organization_name,
-//                 planName: plan?.plan_name || "Selected Plan",
-//                 billingCycle,
-//                 price,
-//                 startDate: new Date(startDate).toLocaleDateString(),
-//                 endDate: new Date(renewalDate).toLocaleDateString(),
-//               },
-//               this.mailConfigService, // ✅ use same mail config service
-//             ),
-//           );
+  //           await this.mailService.sendEmail(
+  //             primaryUser?.business_email,
+  //             'Your Subscription Order Has Been Placed Successfully',
+  //             await renderEmail(
+  //               EmailTemplate.ORDER_PLACED,
+  //               {
+  //                 name: orderPlacedBy,
+  //                 email: primaryUser?.business_email,
+  //                 companyName: organization.organization_name,
+  //                 planName: plan?.plan_name || "Selected Plan",
+  //                 billingCycle,
+  //                 price,
+  //                 startDate: new Date(startDate).toLocaleDateString(),
+  //                 endDate: new Date(renewalDate).toLocaleDateString(),
+  //               },
+  //               this.mailConfigService, // ✅ use same mail config service
+  //             ),
+  //           );
 
-//           console.log("✅ Order confirmation email sent successfully.");
-//         } catch (emailError) {
-//           console.error("⚠️ Failed to send order confirmation email:", emailError);
-//         }
+  //           console.log("✅ Order confirmation email sent successfully.");
+  //         } catch (emailError) {
+  //           console.error("⚠️ Failed to send order confirmation email:", emailError);
+  //         }
 
-//       console.log('💾 Saved Billing Info:', savedBilling);
-//       if (orderDto.featureOverrides && orderDto.featureOverrides.length > 0) {
-//         await this.updateOverrides(
-//           orderDto.organizationId,        // org_id
-//           orderDto.featureOverrides,      // array of overrides
-//           context.userId                  // changedBy (optional)
-//         );
-//       }
+  //       console.log('💾 Saved Billing Info:', savedBilling);
+  //       if (orderDto.featureOverrides && orderDto.featureOverrides.length > 0) {
+  //         await this.updateOverrides(
+  //           orderDto.organizationId,        // org_id
+  //           orderDto.featureOverrides,      // array of overrides
+  //           context.userId                  // changedBy (optional)
+  //         );
+  //       }
 
-//       // Return combined data including user info
-//       return {
-//         statusCode: 200,
-//         message: "Order created/updated successfully",
-//         data: {
-//           subscription: savedSub,
-//           organization: {
-//             organizationId: organization.organization_id,
-//             companyName: organization.organization_name,
-//             organizationSchemaName: organization.organization_schema_name,
-//             industryId: organization.industry_type_id,
-//             industryName: "", // optional
-//             firstName: primaryUser?.first_name,
-//             lastName: primaryUser?.last_name,
-//             businessEmail: primaryUser?.business_email,
-//             phoneNumber: primaryUser?.phone_number,
-//           },
-//         },
-//       };
-//     } catch (error) {
-//       console.error("Error creating/updating order:", error);
-//       throw new HttpException({ statusCode: 500, message: error.message }, HttpStatus.INTERNAL_SERVER_ERROR);
-//     }
-//   }
-async createOrUpdateOrder(orderDto: CreateOrderDto, context: any): Promise<any> {
-  const {
-    organizationId,
-    planId,
-    billingCycle,
-    startDate,
-    endDate,
-    price,
-    autoRenewal,
-    isTrialPeriod,
-    paymentMethodId,
-    paymentTerm,
-    customerPO,
-    paymentStatus,
-    orderPlacedBy,
-    productId,
+  //       // Return combined data including user info
+  //       return {
+  //         statusCode: 200,
+  //         message: "Order created/updated successfully",
+  //         data: {
+  //           subscription: savedSub,
+  //           organization: {
+  //             organizationId: organization.organization_id,
+  //             companyName: organization.organization_name,
+  //             organizationSchemaName: organization.organization_schema_name,
+  //             industryId: organization.industry_type_id,
+  //             industryName: "", // optional
+  //             firstName: primaryUser?.first_name,
+  //             lastName: primaryUser?.last_name,
+  //             businessEmail: primaryUser?.business_email,
+  //             phoneNumber: primaryUser?.phone_number,
+  //           },
+  //         },
+  //       };
+  //     } catch (error) {
+  //       console.error("Error creating/updating order:", error);
+  //       throw new HttpException({ statusCode: 500, message: error.message }, HttpStatus.INTERNAL_SERVER_ERROR);
+  //     }
+  //   }
+  async createOrUpdateOrder(orderDto: CreateOrderDto, context: any): Promise<any> {
+    const {
+      organizationId,
+      planId,
+      billingCycle,
+      startDate,
+      endDate,
+      price,
+      autoRenewal,
+      isTrialPeriod,
+      paymentMethodId,
+      paymentTerm,
+      customerPO,
+      paymentStatus,
+      orderPlacedBy,
+      productId,
       trialPeriodUnit,
-  trialPeriodCount,
-  trialStartDate,
-  trialExpiryDate,
-  gracePeriod,
-  percentage,
-  grandTotal,
-  } = orderDto;
+      trialPeriodCount,
+      trialStartDate,
+      trialExpiryDate,
+      gracePeriod,
+      percentage,
+      grandTotal,
+      resellerId,
+    } = orderDto;
 
-  if (!organizationId || !planId || !billingCycle || !price || !productId) {
-    throw new BadRequestException({ statusCode: 400, message: "Missing required fields." });
-  }
-
-  try {
-    // 1️⃣ Fetch organization and primary user with organization relation
-    const primaryUser = await this.registerUser.findOne({
-      where: { organization_id: organizationId, is_primary_user: 'Y' },
-      relations: ['organization'],
-    });
-
-    if (!primaryUser) throw new BadRequestException({ statusCode: 404, message: "Primary user not found for this organization." });
-
-    const organization = primaryUser.organization;
-
-    // 2️⃣ Create or update subscription
-    const today = new Date();
-    const renewalDate = endDate ? new Date(endDate) : new Date(today);
-    if (!endDate) {
-      if (billingCycle === "monthly") renewalDate.setMonth(renewalDate.getMonth() + 1);
-      else if (billingCycle === "yearly") renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+    if (!organizationId || !planId || !billingCycle || !price || !productId) {
+      throw new BadRequestException({ statusCode: 400, message: "Missing required fields." });
     }
 
-    let subscription = await this.subscriptionRepository.findOne({
-      where: { organization_profile_id: organizationId, productId },
-    });
-    console.log("subscription subscription:",subscription);
-    if (!subscription) {
-      const subBillingId = await this.generateBillingId();
-      const subOrderId = await this.generateOrderId();
-
-      subscription = this.subscriptionRepository.create({
-        organization_profile_id: organizationId,
-        productId,
-        plan_id: planId,
-        plan_billing_id: billingCycle,
-        subscription_type_id: 1,
-        start_date: new Date(startDate) || today,
-        renewal_date: renewalDate,
-        price: Number(price),
-        auto_renewal: autoRenewal,
-        is_trial_period: isTrialPeriod,
-        percentage: orderDto.percentage || 0,
-        grand_total: Number(grandTotal),
-        payment_status: paymentStatus as 'pending' | 'completed' | 'failed',
-        sub_billing_id: subBillingId,
-        sub_order_id: subOrderId,
-        created_by: context.userId,
-        purchase_date: today,
-        payment_mode: String(paymentMethodId),
-        is_activated: true,
-          trial_period_unit: trialPeriodUnit || null,
-  trial_period_count: trialPeriodCount || null,
-  trial_start_date: trialStartDate ? new Date(trialStartDate) : null,
-  trial_expiry_date: trialExpiryDate ? new Date(trialExpiryDate) : null,
-  grace_period: gracePeriod || 0,
-      });
-    } else {
-      // Update existing subscription
-      subscription.plan_billing_id = billingCycle;
-      subscription.plan_id = planId;
-      subscription.start_date = new Date(startDate) || subscription.start_date;
-      subscription.renewal_date = renewalDate;
-      subscription.price = Number(price);
-      subscription.auto_renewal = autoRenewal;
-      subscription.is_trial_period = isTrialPeriod;
-      subscription.grand_total = grandTotal;
-      subscription.payment_status = paymentStatus as 'pending' | 'completed' | 'failed';
-      subscription.purchase_date = today;
-      subscription.payment_mode = String(paymentMethodId);
-      subscription.is_active = true;
-      subscription.is_activated = true;
-      subscription.productId = productId;
-      subscription.percentage = orderDto.percentage || subscription.percentage || 0; 
-      subscription.trial_period_unit = trialPeriodUnit || subscription.trial_period_unit;
-subscription.trial_period_count = trialPeriodCount || subscription.trial_period_count;
-subscription.trial_start_date = trialStartDate ? new Date(trialStartDate) : subscription.trial_start_date;
-subscription.trial_expiry_date = trialExpiryDate ? new Date(trialExpiryDate) : subscription.trial_expiry_date;
-subscription.grace_period = gracePeriod ?? subscription.grace_period;
-
-    }
-
-    const savedSub = await this.subscriptionRepository.save(subscription);
-
-    // 3️⃣ Save billing info
-    let billing = await this.billingInfoRepository.findOne({ where: { org_subscription_id: savedSub.subscription_id } });
-
-    if (!billing) {
-      billing = this.billingInfoRepository.create({
-        org_subscription_id: savedSub.subscription_id,
-        orderplacedby: orderPlacedBy,
-        paymentterm: paymentTerm,
-        customerpo: customerPO,
-        methodId: paymentMethodId || 5,
-        company_name: organization.organization_name,
-        first_name: primaryUser.first_name,
-        last_name: primaryUser.last_name,
-        email: primaryUser.business_email,
-        phone_number: primaryUser.phone_number,
-        productId,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-    } else {
-      billing.methodId = paymentMethodId || billing.methodId;
-      billing.orderplacedby = orderPlacedBy;
-      billing.paymentterm = paymentTerm;
-      billing.customerpo = customerPO;
-      billing.company_name = organization.organization_name;
-      billing.first_name = primaryUser.first_name;
-      billing.last_name = primaryUser.last_name;
-      billing.email = primaryUser.business_email;
-      billing.phone_number = primaryUser.phone_number;
-      billing.productId = productId;
-      billing.updated_at = new Date();
-    }
-
-    const savedBilling = await this.billingInfoRepository.save(billing);
-
-    const productRepo = await this.dataSource.getRepository(Product);
-    const product = await productRepo.findOne({ where: { productId } });
-    if (!product) throw new BadRequestException({ statusCode: 404, message: "Product not found." });
-
-    const schemaName = `${product.schemaInitial}_org_${organization.organization_schema_name}`;
-
-    // Check if schema already exists
-    const schemaExists = await this.dataSource.query(
-      `SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1`,
-      [schemaName]
-    );
-    // 4️⃣ Create schema for the product
-    if (schemaExists.length === 0) {
-    if (productId === 1) {
-      const schemaManager = new OrganizationSchemaManager(this.dataSource, this.mailConfigService, this.mailService);
-      await schemaManager.createOrganizationSchemaAndTables(primaryUser);
-    } else {
-      const hrmsSchemaManager = new HrmsOrganizationSchemaManager(this.dataSource, this.mailConfigService, this.mailService);
-      await hrmsSchemaManager.createOrganizationSchemaAndTables(primaryUser);
-    }
-    } else {
-    console.log(`Schema "${schemaName}" already exists. Skipping creation.`);
-  }
-
-    // 5️⃣ Send order confirmation email
     try {
-  const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
-  const productName = product?.name || "Selected Product";
-  await this.mailService.sendEmail(
-    primaryUser.business_email,
-    'Your Subscription Order Has Been Placed Successfully',
-    await renderEmail(
-      EmailTemplate.PO_CONFIRMATION_EMAIL,
-      {
-        // // 👇 These names and fields stay the same as before
-        // customerName: primaryUser.first_name + " " + (primaryUser.last_name || ""),
-        // email: primaryUser.business_email,
-        // companyName: organization.organization_name, // organization name
-        // planName: plan?.plan_name || "Selected Plan",
-        // billingCycle,
-        // price: `₹${Number(price).toLocaleString('en-IN')}`,
-        // paymentStatus: savedSub.payment_status || 'Pending',
-        // orderDate: new Date(savedSub.purchase_date).toLocaleDateString('en-IN'),
-        // startDate: new Date(savedSub.start_date).toLocaleDateString('en-IN'),
-        // renewalDate: new Date(savedSub.renewal_date).toLocaleDateString('en-IN'),
+      // 1️⃣ Fetch organization and primary user with organization relation
+      const primaryUser = await this.registerUser.findOne({
+        where: { organization_id: organizationId, is_primary_user: 'Y' },
+        relations: ['organization'],
+      });
 
-        // // 👇 This doesn’t change your format but adds context safely
-        // productName, 
-        // orderPlacedBy: orderPlacedBy || primaryUser.first_name,
-            name: primaryUser.first_name + " " + (primaryUser.last_name || ""),
-            renewalDate: new Date(savedSub.renewal_date).toLocaleDateString('en-IN'),
-        softwareName: productName,
-        planType: plan?.plan_name || "Selected Plan",
-        users: 1 || 1,
-        duration: billingCycle === 'monthly' ? '1 Month' : '1 Year',
-        amount: `₹${Number(price).toLocaleString('en-IN')}`,
-        poNumber: customerPO || 'N/A',
+      if (!primaryUser) throw new BadRequestException({ statusCode: 404, message: "Primary user not found for this organization." });
+
+      const organization = primaryUser.organization;
+
+      // 2️⃣ Create or update subscription
+      const today = new Date();
+      const renewalDate = endDate ? new Date(endDate) : new Date(today);
+      if (!endDate) {
+        if (billingCycle === "monthly") renewalDate.setMonth(renewalDate.getMonth() + 1);
+        else if (billingCycle === "yearly") renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+      }
+
+      let subscription = await this.subscriptionRepository.findOne({
+        where: { organization_profile_id: organizationId, productId },
+      });
+      console.log("subscription subscription:", subscription);
+      if (!subscription) {
+        const subBillingId = await this.generateBillingId();
+        const subOrderId = await this.generateOrderId();
+
+        subscription = this.subscriptionRepository.create({
+          organization_profile_id: organizationId,
+          productId,
+          plan_id: planId,
+          plan_billing_id: billingCycle,
+          subscription_type_id: 1,
+          start_date: new Date(startDate) || today,
+          renewal_date: renewalDate,
+          price: Number(price),
+          auto_renewal: autoRenewal,
+          is_trial_period: isTrialPeriod,
+          percentage: orderDto.percentage || 0,
+          grand_total: Number(grandTotal),
+          payment_status: paymentStatus as 'pending' | 'completed' | 'failed',
+          sub_billing_id: subBillingId,
+          sub_order_id: subOrderId,
+          created_by: context.userId,
+          purchase_date: today,
+          payment_mode: Number(paymentMethodId),
+          is_activated: true,
+          trial_period_unit: trialPeriodUnit || null,
+          trial_period_count: trialPeriodCount || null,
+          trial_start_date: trialStartDate ? new Date(trialStartDate) : null,
+          trial_expiry_date: trialExpiryDate ? new Date(trialExpiryDate) : null,
+          grace_period: gracePeriod || 0,
+          reseller_id: resellerId || null,
+        });
+      } else {
+        // Update existing subscription
+        subscription.plan_billing_id = billingCycle;
+        subscription.plan_id = planId;
+        subscription.start_date = new Date(startDate) || subscription.start_date;
+        subscription.renewal_date = renewalDate;
+        subscription.price = Number(price);
+        subscription.auto_renewal = autoRenewal;
+        subscription.is_trial_period = isTrialPeriod;
+        subscription.grand_total = grandTotal;
+        subscription.payment_status = paymentStatus as 'pending' | 'completed' | 'failed';
+        subscription.purchase_date = today;
+        subscription.payment_mode = Number(paymentMethodId);
+        subscription.is_active = true;
+        subscription.is_activated = true;
+        subscription.productId = productId;
+        subscription.percentage = orderDto.percentage || subscription.percentage || 0;
+        subscription.trial_period_unit = trialPeriodUnit || subscription.trial_period_unit;
+        subscription.trial_period_count = trialPeriodCount || subscription.trial_period_count;
+        subscription.trial_start_date = trialStartDate ? new Date(trialStartDate) : subscription.trial_start_date;
+        subscription.trial_expiry_date = trialExpiryDate ? new Date(trialExpiryDate) : subscription.trial_expiry_date;
+        subscription.grace_period = gracePeriod ?? subscription.grace_period;
+        subscription.reseller_id = resellerId ?? subscription.reseller_id;
+
+      }
+
+      const savedSub = await this.subscriptionRepository.save(subscription);
+
+      // 3️⃣ Save billing info
+      let billing = await this.billingInfoRepository.findOne({ where: { org_subscription_id: savedSub.subscription_id } });
+
+      if (!billing) {
+        billing = this.billingInfoRepository.create({
+          org_subscription_id: savedSub.subscription_id,
+          orderplacedby: orderPlacedBy,
+          paymentterm: paymentTerm,
+          customerpo: customerPO,
+          methodId: paymentMethodId || 5,
+          company_name: organization.organization_name,
+          first_name: primaryUser.first_name,
+          last_name: primaryUser.last_name,
+          email: primaryUser.business_email,
+          phone_number: primaryUser.phone_number,
+          productId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      } else {
+        billing.methodId = paymentMethodId || billing.methodId;
+        billing.orderplacedby = orderPlacedBy;
+        billing.paymentterm = paymentTerm;
+        billing.customerpo = customerPO;
+        billing.company_name = organization.organization_name;
+        billing.first_name = primaryUser.first_name;
+        billing.last_name = primaryUser.last_name;
+        billing.email = primaryUser.business_email;
+        billing.phone_number = primaryUser.phone_number;
+        billing.productId = productId;
+        billing.updated_at = new Date();
+      }
+
+      const savedBilling = await this.billingInfoRepository.save(billing);
+
+      const productRepo = await this.dataSource.getRepository(Product);
+      const product = await productRepo.findOne({ where: { productId } });
+      if (!product) throw new BadRequestException({ statusCode: 404, message: "Product not found." });
+
+      const schemaName = `${product.schemaInitial}_org_${organization.organization_schema_name}`;
+
+      // Check if schema already exists
+      const schemaExists = await this.dataSource.query(
+        `SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1`,
+        [schemaName]
+      );
+      // 4️⃣ Create schema for the product
+      if (schemaExists.length === 0) {
+        if (productId === 1) {
+          const schemaManager = new OrganizationSchemaManager(this.dataSource, this.mailConfigService, this.mailService);
+          await schemaManager.createOrganizationSchemaAndTables(primaryUser);
+        } else {
+          const hrmsSchemaManager = new HrmsOrganizationSchemaManager(this.dataSource, this.mailConfigService, this.mailService);
+          await hrmsSchemaManager.createOrganizationSchemaAndTables(primaryUser);
+        }
+      } else {
+        console.log(`Schema "${schemaName}" already exists. Skipping creation.`);
+      }
+
+      // 5️⃣ Send order confirmation email
+      try {
+        const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
+        const productName = product?.name || "Selected Product";
+        await this.mailService.sendEmail(
+          primaryUser.business_email,
+          'Your Subscription Order Has Been Placed Successfully',
+          await renderEmail(
+            EmailTemplate.PO_CONFIRMATION_EMAIL,
+            {
+              // // 👇 These names and fields stay the same as before
+              // customerName: primaryUser.first_name + " " + (primaryUser.last_name || ""),
+              // email: primaryUser.business_email,
+              // companyName: organization.organization_name, // organization name
+              // planName: plan?.plan_name || "Selected Plan",
+              // billingCycle,
+              // price: `₹${Number(price).toLocaleString('en-IN')}`,
+              // paymentStatus: savedSub.payment_status || 'Pending',
+              // orderDate: new Date(savedSub.purchase_date).toLocaleDateString('en-IN'),
+              // startDate: new Date(savedSub.start_date).toLocaleDateString('en-IN'),
+              // renewalDate: new Date(savedSub.renewal_date).toLocaleDateString('en-IN'),
+
+              // // 👇 This doesn’t change your format but adds context safely
+              // productName, 
+              // orderPlacedBy: orderPlacedBy || primaryUser.first_name,
+              name: primaryUser.first_name + " " + (primaryUser.last_name || ""),
+              renewalDate: new Date(savedSub.renewal_date).toLocaleDateString('en-IN'),
+              softwareName: productName,
+              planType: plan?.plan_name || "Selected Plan",
+              users: 1 || 1,
+              duration: billingCycle === 'monthly' ? '1 Month' : '1 Year',
+              amount: `₹${Number(price).toLocaleString('en-IN')}`,
+              poNumber: customerPO || 'N/A',
             },
-      this.mailConfigService,
-    ),
-  );
-} catch (emailError) {
-  console.error("Failed to send order email:", emailError);
-}
-try {
-  const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
-  const productName = product?.name || "Selected Product";
+            this.mailConfigService,
+          ),
+        );
+      } catch (emailError) {
+        console.error("Failed to send order email:", emailError);
+      }
+      try {
+        const plan = await this.planRepository.findOne({ where: { plan_id: planId } });
+        const productName = product?.name || "Selected Product";
 
-  await this.mailService.sendEmail(
-    primaryUser.business_email,
-    `Offline Payment Instructions – ${productName}`,
-    await renderEmail(
-      EmailTemplate.OFFLINE_PAYMENT_EMAIL, // ✅ your enum for OfflinePaymentEmail
-      {
-        name: primaryUser.first_name + " " + (primaryUser.last_name || ""),
-        softwareName: productName,
-        planType: plan?.plan_name || "Selected Plan",
-        users: 1, // or dynamic
-        duration: billingCycle === 'monthly' ? '1 Month' : '1 Year',
-        amount: `₹${Number(price).toLocaleString('en-IN')}`,
-        poNumber: customerPO || 'N/A',
-        bankName: "Your Bank Name",
-        accountName: "Account Name",
-        accountNumber: "XXXXXX1234",
-        ifscCode: "IFSC0001",
-        // companyName: organization.organization_name,
-        // companyLogo: "", // optional
-        // mailReply: "support@yourcompany.com",
-      },
-      this.mailConfigService, // pass your mail config like you do for other emails
-    ),
-  );
+        await this.mailService.sendEmail(
+          primaryUser.business_email,
+          `Offline Payment Instructions – ${productName}`,
+          await renderEmail(
+            EmailTemplate.OFFLINE_PAYMENT_EMAIL, // ✅ your enum for OfflinePaymentEmail
+            {
+              name: primaryUser.first_name + " " + (primaryUser.last_name || ""),
+              softwareName: productName,
+              planType: plan?.plan_name || "Selected Plan",
+              users: 1, // or dynamic
+              duration: billingCycle === 'monthly' ? '1 Month' : '1 Year',
+              amount: `₹${Number(price).toLocaleString('en-IN')}`,
+              poNumber: customerPO || 'N/A',
+              bankName: "Your Bank Name",
+              accountName: "Account Name",
+              accountNumber: "XXXXXX1234",
+              ifscCode: "IFSC0001",
+              // companyName: organization.organization_name,
+              // companyLogo: "", // optional
+              // mailReply: "support@yourcompany.com",
+            },
+            this.mailConfigService, // pass your mail config like you do for other emails
+          ),
+        );
 
-  console.log(`Offline payment email sent to ${primaryUser.business_email}`);
-} catch (offlineEmailError) {
-  console.error("Failed to send offline payment email:", offlineEmailError);
-}
+        console.log(`Offline payment email sent to ${primaryUser.business_email}`);
+      } catch (offlineEmailError) {
+        console.error("Failed to send offline payment email:", offlineEmailError);
+      }
 
-    // 6️⃣ Update feature overrides if any
-    if (orderDto.featureOverrides?.length) {
-      await this.updateOverrides(orderDto.organizationId, orderDto.featureOverrides, context.userId);
-    }
+      // 6️⃣ Update feature overrides if any
+      if (orderDto.featureOverrides?.length) {
+        await this.updateOverrides(orderDto.organizationId, orderDto.featureOverrides, context.userId);
+      }
 
-    return {
-      statusCode: 200,
-      message: "Order created/updated successfully",
-      data: {
-        subscription: savedSub,
-        organization: {
-          organizationId: organization.organization_id,
-          companyName: organization.organization_name,
-          organizationSchemaName: organization.organization_schema_name,
-          industryId: organization.industry_type_id,
-          firstName: primaryUser.first_name,
-          lastName: primaryUser.last_name,
-          businessEmail: primaryUser.business_email,
-          phoneNumber: primaryUser.phone_number,
+      return {
+        statusCode: 200,
+        message: "Order created/updated successfully",
+        data: {
+          subscription: savedSub,
+          organization: {
+            organizationId: organization.organization_id,
+            companyName: organization.organization_name,
+            organizationSchemaName: organization.organization_schema_name,
+            industryId: organization.industry_type_id,
+            firstName: primaryUser.first_name,
+            lastName: primaryUser.last_name,
+            businessEmail: primaryUser.business_email,
+            phoneNumber: primaryUser.phone_number,
+          },
         },
-      },
-    };
+      };
 
-  } catch (error) {
-    console.error("Error creating/updating order:", error);
-    throw new HttpException({ statusCode: 500, message: error.message }, HttpStatus.INTERNAL_SERVER_ERROR);
+    } catch (error) {
+      console.error("Error creating/updating order:", error);
+      throw new HttpException({ statusCode: 500, message: error.message }, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
-}
 
 
   private async generateBillingId(): Promise<string> {
@@ -4751,7 +4936,7 @@ try {
       if (!userId) {
         return { status: 400, success: false, message: 'userId is required' };
       }
-      
+
       // Fetch user from the database
       const user = await this.registerUser.findOne({
         where: { user_id: userId },
@@ -4824,7 +5009,7 @@ try {
   async getActiveFeaturesByProduct(productId: number): Promise<{ id: number; name: string }[]> {
     try {
       const features = await this.featureRepository.find({
-        select: ['feature_id', 'feature_name','set_limit'],
+        select: ['feature_id', 'feature_name', 'set_limit'],
         where: { is_active: true, product: { productId: productId } },
         relations: ['product'],
         order: { feature_name: 'ASC' },
@@ -4833,7 +5018,7 @@ try {
       return features.map((f) => ({
         id: f.feature_id,
         name: f.feature_name,
-        limit: f.set_limit, 
+        limit: f.set_limit,
       }));
     } catch (error) {
       throw new Error('Error fetching active features: ' + error.message);
@@ -4917,7 +5102,7 @@ try {
     await this.productRepository.save(product);
   }
 
-    async getAllStatus(): Promise<RenewalStatus[]> {
+  async getAllStatus(): Promise<RenewalStatus[]> {
     try {
       return await this.renewalStatusRepository.find({
         where: { is_deleted: false }, // fetch only non-deleted statuses
@@ -4929,81 +5114,171 @@ try {
   }
 
   async getDashboardCounts(): Promise<any> {
-  try {
-    // Total Organizations
-    const orgCount = await this.orgRepo.count();
+    try {
+      // Total Organizations
+      const orgCount = await this.orgRepo.count();
 
-    // Total Products
-    const productCount = await this.productRepository.count({
-      where: { isActive: true },
-    });
+      // Total Products
+      const productCount = await this.productRepository.count({
+        where: { isActive: true },
+      });
 
-    // Total Users
-    const userCount = await this.registerUser.count();
+      // Total Users
+      const userCount = await this.registerUser.count();
 
-    // Total Active Subscriptions
-    const subscriptionCount = await this.subscriptionRepository.count({
-      where: { is_active: true, is_activated: true },
-    });
+      // Total Active Subscriptions
+      const subscriptionCount = await this.subscriptionRepository.count({
+        where: { is_active: true, is_activated: true },
+      });
 
-    // Renewals (subscriptions whose renewal_date is within next 30 days)
-    const renewalCount = await this.subscriptionRepository
-      .createQueryBuilder("sub")
-      .where("sub.is_active = :active", { active: true })
-      .andWhere("sub.renewal_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'")
-      .getCount();
+      // Renewals (subscriptions whose renewal_date is within next 30 days)
+      const renewalCount = await this.subscriptionRepository
+        .createQueryBuilder("sub")
+        .where("sub.is_active = :active", { active: true })
+        .andWhere("sub.renewal_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'")
+        .getCount();
 
-    // Trial Subscriptions
-    const trialSubscriptionCount = await this.subscriptionRepository.count({
-      where: { is_trial_period: true },
-    });
+      // Trial Subscriptions
+      const trialSubscriptionCount = await this.subscriptionRepository.count({
+        where: { is_trial_period: true },
+      });
 
-    // Product-wise Subscription Count
-    const productWiseSubscriptions = await this.subscriptionRepository
-      .createQueryBuilder("sub")
-      .select("p.name", "productName")
-      .addSelect("COUNT(sub.subscription_id)", "count")
-      .leftJoin("sub.product", "p")
-      .where("sub.is_active = true")
-       .andWhere("sub.product_id IS NOT NULL") 
-      .groupBy("p.name")
-      .getRawMany();
+      // Product-wise Subscription Count
+      const productWiseSubscriptions = await this.subscriptionRepository
+        .createQueryBuilder("sub")
+        .select("p.name", "productName")
+        .addSelect("COUNT(sub.subscription_id)", "count")
+        .leftJoin("sub.product", "p")
+        .where("sub.is_active = true")
+        .andWhere("sub.product_id IS NOT NULL")
+        .groupBy("p.name")
+        .getRawMany();
 
-    return {
-      orgCount,
-      productCount,
-      userCount,
-      subscriptionCount,
-      renewalCount,
-      trialSubscriptionCount,
-      productWiseSubscriptions,
-    };
-  } catch (error) {
-    throw new Error("Error fetching dashboard counts: " + error.message);
+      return {
+        orgCount,
+        productCount,
+        userCount,
+        subscriptionCount,
+        renewalCount,
+        trialSubscriptionCount,
+        productWiseSubscriptions,
+      };
+    } catch (error) {
+      throw new Error("Error fetching dashboard counts: " + error.message);
+    }
   }
-}
 
-async toggleLoginRestriction(id: number) {
-  try {
-    const subscription = await this.subscriptionRepository.findOne({
-      where: { subscription_id: id },
+  async toggleLoginRestriction(id: number) {
+    try {
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { subscription_id: id },
+      });
+
+      if (!subscription) {
+        throw new Error('Subscription not found');
+      }
+
+      // Toggle restrict_login value
+      subscription.restrict_login = !subscription.restrict_login;
+
+      const updated = await this.subscriptionRepository.save(subscription);
+
+      return updated;
+    } catch (error) {
+      console.error('Error toggling login restriction:', error);
+      throw new Error('Failed to toggle login restriction');
+    }
+  }
+
+  async listSalesRequests({
+    page = 1,
+    limit = 10,
+    search = '',
+    status,
+  }: {
+    page: number;
+    limit: number;
+    search?: string;
+    status?: 'open' | 'closed' | 'pending';
+  }) {
+    try {
+      const qb = this.salesrequestsRepository
+        .createQueryBuilder('request')
+        .where('request.is_deleted = false');
+
+      if (search) {
+        qb.andWhere(
+          '(LOWER(request.customerName) LIKE LOWER(:search) OR LOWER(request.email) LIKE LOWER(:search) OR LOWER(request.message) LIKE LOWER(:search))',
+          { search: `%${search}%` },
+        );
+      }
+
+      if (status) {
+        qb.andWhere('request.status = :status', { status });
+      }
+
+      qb.orderBy('request.created_at', 'DESC')
+        .skip((page - 1) * limit)
+        .take(limit);
+
+      const [data, total] = await qb.getManyAndCount();
+
+      return {
+        data,
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      throw new Error('Error listing sales requests: ' + error.message);
+    }
+  }
+
+  async getSalesRequestById(id: number): Promise<any> {
+    const qb = this.salesrequestsRepository
+      .createQueryBuilder('request')
+      .where('request.is_deleted = false')
+      .andWhere('request.contact_request_id = :id', { id });
+
+    const request = await qb.getOne();
+
+    if (!request) throw new Error('Sales request not found');
+    return request;
+  }
+
+  async softDeleteSalesRequest(requestId: number): Promise<void> {
+    const request = await this.salesrequestsRepository.findOne({
+      where: { contactRequestId: requestId },
     });
 
-    if (!subscription) {
-      throw new Error('Subscription not found');
+    if (!request) {
+      throw new Error('Sales request not found');
     }
 
-    // Toggle restrict_login value
-    subscription.restrict_login = !subscription.restrict_login;
+    request.is_deleted = true;
+    request.is_active = false;
 
-    const updated = await this.subscriptionRepository.save(subscription);
+    await this.salesrequestsRepository.save(request);
+  }
 
-    return updated;
+  async disableOrganization(id: number): Promise<void> {
+  try {
+    const organization = await this.orgRepo.findOne({
+      where: { organization_id: id },
+    });
+
+    if (!organization) {
+      throw new Error('Organization not found');
+    }
+
+    // ✅ Soft-disable organization
+    organization.status = false;
+
+    await this.orgRepo.save(organization);
   } catch (error) {
-    console.error('Error toggling login restriction:', error);
-    throw new Error('Failed to toggle login restriction');
+    console.error('Error disabling organization:', error);
+    throw new Error('Failed to disable organization');
   }
 }
-
 
 }

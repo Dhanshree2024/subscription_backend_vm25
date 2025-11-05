@@ -16,6 +16,7 @@ import {
   UnauthorizedException,
   UseInterceptors,
   UploadedFile,
+  HttpException,
 } from '@nestjs/common';
 // import { OrganizationalProfileService } from './organizational-profile.service';
 import { OrganizationService } from './organizational-profile.service';
@@ -48,7 +49,7 @@ import { EditDepartmentDto } from './dto/update-dept.dto';
 import { createBranchDTO } from './dtos/create-branch.dto';
 import { CreatePaymentDto } from 'src/subscription_pricing/dto/payment.dto';
 
-
+import { CreateContactSalesRequestDto,UpdateContactSalesRequestDto } from 'src/subscription_pricing/dto/contact-sales-requests.dto';
 // multer configuration
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -1928,5 +1929,174 @@ async getAllUsersWithOrganization(
   }
 }
 
+@Post('asset-org-limitations')
+async getAssetOrgLimitations(@Body() body: { userId: number; orgId: number }, @Res() res: Response) {
+  try {
+    const { userId, orgId } = body;
 
+    if (!userId || !orgId) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: 'userId or orgId is missing in request',
+      });
+    }
+
+    // ✅ Fetch organization limitations
+    const data = await this.organizationService.getOrgLimitations(orgId);
+
+    if (!data || data.length === 0) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        success: false,
+        message: 'No limitations found for this organization',
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Fetched organization limitations successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('Error fetching organization limitations:', error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message || 'Failed to fetch organization limitations',
+    });
+  }
+}
+
+
+@Post('asset-restrictions')
+async getAssetRestrictions(
+  @Body() body: { userId: number; orgId: number },
+  @Res() res: Response,
+) {
+  try {
+    const { userId, orgId } = body;
+
+    if (!userId || !orgId) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: 'userId or orgId is missing in request',
+      });
+    }
+
+    // ✅ Fetch formatted organization limitations
+    const data = await this.organizationService.getAssetRestrictions(orgId);
+
+    if (!data || data.length === 0) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        success: false,
+        message: 'No limitations found for this organization',
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Fetched organization limitations successfully',
+      data,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching organization limitations:', error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message || 'Failed to fetch organization limitations',
+    });
+  }
+}
+
+
+
+  @Post('insert-sales-request')
+  async submitContactSalesRequest(
+    @Body() createContactSalesRequestDto: CreateContactSalesRequestDto,
+  ) {
+    try {
+      const result = await this.organizationService.createContactSalesRequest(createContactSalesRequestDto);
+      return {
+        success: true,
+        message: 'Contact sales request submitted successfully',
+        data: result,
+      };
+    } catch (error) {
+      console.error('Error submitting contact sales request:', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to submit contact sales request',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+@Post('check-restriction-by-feature')
+async checkAssetRestriction(
+  @Body() body: { orgId: number; featureId: number },
+  @Res() res: Response,
+) {
+  try {
+    const { orgId, featureId } = body;
+
+    if (!orgId || !featureId) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: 'orgId or featureId is missing in request',
+      });
+    }
+
+    const restriction = await this.organizationService.getRestrictionByFeatureId(orgId, featureId);
+
+    if (!restriction) {
+      return res.status(HttpStatus.NOT_FOUND).json({
+        success: false,
+        message: 'No restriction found for this feature in organization',
+      });
+    }
+
+    return res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Fetched feature restriction successfully',
+      data: restriction,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching feature restriction:', error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message || 'Failed to fetch feature restriction',
+    });
+  }
+}
+
+
+@Post('update-usage-count')
+async updateUsageCount(
+  @Body()
+  body: {
+    orgId: number;
+    featureId: number;
+    currentValue: string; // ✅ can be a number as string or text (e.g., "enabled")
+  },
+) {
+  try {
+    const result = await this.organizationService.updateUsageCount(
+      body.orgId,
+      body.featureId,
+      body.currentValue,
+    );
+
+    return {
+      success: true,
+      message: 'Usage value updated successfully',
+      result,
+    };
+  } catch (error) {
+    console.error('❌ Error updating usage value:', error);
+    throw new HttpException(
+      'Failed to update usage value',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
+}
 }

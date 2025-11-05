@@ -4,6 +4,7 @@ import { SubscriptionController } from './subscription.controller';
 import { OrganizationalProfileCommonData } from 'src/common/organizational-info/organizational-profile';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { HttpModule } from '@nestjs/axios';
 import { Feature } from './entity/feature.entity';
 import { PlanBilling } from './entity/plan-billing.entity';
 import { PlanFeatureMapping } from './entity/plan-feature-mapping.entity';
@@ -31,16 +32,18 @@ import { PaymentMethod } from './entity/payment_methods.entity';
 import { PaymentMode } from './entity/payment_mode.entity';
 import { Product } from './entity/product.entity';
 import { RenewalStatus } from './entity/renewal.entity';
+import { ContactSalesRequest } from './entity/contact_sales_requests.entity';
 
 @Module({ 
 
 
   imports: [
+        HttpModule,
         JwtModule.register({
           secret: process.env.JWT_SECRET, // Use environment variable
           signOptions: { expiresIn:process.env.JWT_EXPIRATION },
         }),
-          TypeOrmModule.forFeature([Branch, Subscription,OrgSubscription,SubscriptionType,Plan,PlanFeatureMapping,PlanBilling,Feature,SubscriptionLog,BillingInfo,PaymentTransaction,OrgFeatureOverride,OrgOverride,RegisterOrganization,OrgFeatureOverrideLog, Session,  RegisterUserLogin,PlanSetting,OfflinePaymentRequest,PaymentMethod, PaymentMode, Product, RenewalStatus ]),DatabaseModule,MailModule,OrganizationalProfileModule
+          TypeOrmModule.forFeature([Branch, Subscription,OrgSubscription,SubscriptionType,Plan,PlanFeatureMapping,PlanBilling,Feature,SubscriptionLog,BillingInfo,PaymentTransaction,OrgFeatureOverride,OrgOverride,RegisterOrganization,OrgFeatureOverrideLog, Session,  RegisterUserLogin,PlanSetting,OfflinePaymentRequest,PaymentMethod, PaymentMode, Product, RenewalStatus, ContactSalesRequest ]),DatabaseModule,MailModule,OrganizationalProfileModule
       ],
 
   controllers: [SubscriptionController],

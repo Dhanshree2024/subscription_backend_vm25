@@ -94,4 +94,6 @@ org_subscription_id?: number;
   @JoinColumn({ name: 'product_id' })
   product: Product;
 
+  
+
 }

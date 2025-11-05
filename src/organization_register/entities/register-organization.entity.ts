@@ -16,6 +16,21 @@ export class RegisterOrganization {
   @Column()
   industry_type_id: number;
 
+  @Column({ name: 'customer_id', type: 'varchar', length: 100, nullable: true })
+  customer_id?: string;
+
+  @Column({ name: 'payment_term', type: 'varchar', length: 50, nullable: true })
+  payment_term?: string;
+
+  @Column({ name: 'gst_registered', type: 'boolean', default: false })
+  gst_registered: boolean;
+
+  @Column({ name: 'gst_number', type: 'varchar', length: 30, nullable: true })
+  gst_number?: string;
+
+  @Column({ name: 'status', type: 'boolean', default: true })
+  status: boolean;
+
   @OneToMany(() => RegisterUserLogin, (userLogin) => userLogin.organization)
   users: RegisterUserLogin[];
 

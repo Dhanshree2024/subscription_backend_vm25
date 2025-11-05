@@ -28,8 +28,8 @@ export class UpdateOrgSubscriptionDto {
     payment_status?: 'pending' | 'completed' | 'failed';
 
     @IsOptional()
-    @IsString()
-    payment_mode?: string;
+    @IsInt()
+    payment_mode?: number;
   
     @IsOptional()
     @IsDateString()

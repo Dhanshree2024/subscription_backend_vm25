@@ -82,6 +82,11 @@ percentage?: number;
   @IsNumber()
   @Type(() => Number)
   grandTotal?: number;
+
+  @IsOptional()
+@IsNumber()
+@Type(() => Number)
+resellerId?: number;
       // ✅ Add featureOverrides array
     @IsOptional()
   featureOverrides?: {

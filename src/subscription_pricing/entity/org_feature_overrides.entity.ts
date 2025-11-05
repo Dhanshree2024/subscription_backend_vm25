@@ -41,6 +41,8 @@ import {
     @Column({ type: 'text', nullable: true })
     default_value: string;
   
+    @Column({ name: 'current_usage', type: 'varchar', length: 255, nullable: true })
+    currentUsage: string;
     // 🔗 Relationships
     @ManyToOne(() => PlanFeatureMapping, (mapping) => mapping.overrides, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'mapping_id', referencedColumnName: 'mapping_id' })

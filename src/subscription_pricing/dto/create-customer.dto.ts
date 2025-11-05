@@ -90,4 +90,20 @@ export class CreateCustomerDto {
   // @IsOptional()
 
   // paymentMethodId: number;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentTerm?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  gstRegistered?: boolean;
+
+  @IsOptional()
+  @IsString()
+  gstNumber?: string;
 }

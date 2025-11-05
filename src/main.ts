@@ -34,7 +34,7 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors({
     // origin: 'http://localhost:3000', // Allow all origins
-    origin: [ 'http://192.168.1.139:3005','http://192.168.1.115:3000','http://192.168.1.115:3001','http://localhost:3000','http://localhost:3001', 'http://192.168.1.139:3001','http://localhost:3005', 'http://192.168.1.148:3005'],
+    origin: [ 'http://192.168.1.139:3005','http://192.168.1.115:3000','http://192.168.1.115:3001','http://localhost:3000','http://localhost:3001', 'http://192.168.1.139:3001','http://localhost:3005', 'http://192.168.1.148:3005','http://192.168.1.25:3005'],
     methods: 'GET, POST, PUT, DELETE, OPTIONS', // Allowed HTTP methods
     allowedHeaders: 'Content-Type, Authorization, X-API-KEY', // Allowed headers
     credentials: true, // Allow cookies

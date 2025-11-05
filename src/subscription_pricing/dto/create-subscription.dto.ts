@@ -24,8 +24,8 @@ export class CreateOrgSubscriptionDto {
     payment_status: 'pending' | 'completed' | 'failed';
   
     @IsOptional()
-    @IsString()
-    payment_mode?: string;
+    @IsInt()
+    payment_mode?: number;
   
     @IsDateString()
     purchase_date: Date;

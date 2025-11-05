@@ -1813,5 +1813,80 @@ async toggleLoginRestriction(@Param('id') id: number, @Res() res: Response) {
   }
 }
 
-  
+   @Post('sales-requests-list')
+  async listSalesRequests(@Body() body: any, @Res() res: Response) {
+    try {
+      const { page = 1, limit = 10, search = '', status } = body;
+
+      const result = await this.subscriptionService.listSalesRequests({
+        page: Number(page),
+        limit: Number(limit),
+        search,
+        status,
+      });
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Fetched sales requests successfully',
+        ...result,
+      });
+    } catch (error) {
+      console.error('Error fetching sales requests:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message || 'Failed to fetch sales requests',
+      });
+    }
+  }
+
+  @Get('get-sales-requests/:id')
+async getSalesRequest(@Param('id') id: number, @Res() res: Response) {
+  try {
+    const request = await this.subscriptionService.getSalesRequestById(id);
+    return res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Fetched sales request successfully',
+      data: request,
+    });
+  } catch (error) {
+    return res.status(HttpStatus.NOT_FOUND).json({
+      success: false,
+      message: error.message || 'Sales request not found',
+    });
+  }
+}
+  @Post('delete-sales-request/:id')
+  async deleteSalesRequest(@Param('id') id: number, @Res() res: Response) {
+    try {
+      await this.subscriptionService.softDeleteSalesRequest(id);
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Sales request deleted successfully',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message || 'Failed to delete sales request',
+      });
+    }
+  }
+
+@Post('disable-organization/:id')
+async disableOrganization(@Param('id') id: number, @Res() res: Response) {
+  try {
+    await this.subscriptionService.disableOrganization(Number(id));
+
+    return res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Organization disabled successfully',
+    });
+  } catch (error) {
+    console.error('Error disabling organization:', error);
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message || 'Failed to disable organization',
+    });
+  }
+}
+
 } 
